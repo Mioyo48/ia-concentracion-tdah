@@ -14,8 +14,8 @@ MAX_DURATION = 20 * 60
 
 CHUNK_SECONDS = 8
 SEGMENT_SECONDS = 8
-STEP_SECONDS = 0.5
-STEPS_PER_SEGMENT = 16
+STEP_SECONDS = 1.0
+STEPS_PER_SEGMENT = 8
 
 CHUNK_FRAMES = SAMPLE_RATE * CHUNK_SECONDS
 SEGMENT_FRAMES = int(
@@ -195,40 +195,40 @@ def build_music_plan(
         ),
     )
 
-    note_active = (
-        rng.random(
-            (
-                segment_count,
-                STEPS_PER_SEGMENT,
-            )
+   note_active = (
+    rng.random(
+        (
+            segment_count,
+            STEPS_PER_SEGMENT,
         )
-        > 0.14
+    )
+        > 0.48
     )
 
     note_lengths = np.clip(
         rng.normal(
-            0.34,
-            0.055,
-            (
-                segment_count,
-                STEPS_PER_SEGMENT,
+            0.72,
+            0.12,
+        (
+            segment_count,
+            STEPS_PER_SEGMENT,
             ),
         ),
-        0.20,
-        0.46,
+        0.45,
+        0.95,
     )
 
     note_velocities = np.clip(
         rng.normal(
-            0.88,
-            0.15,
+            0.76,
+            0.12,
             (
                 segment_count,
                 STEPS_PER_SEGMENT,
             ),
         ),
-        0.50,
-        1.18,
+        0.45,
+        1.0,
     )
 
     note_offsets = np.clip(
@@ -253,14 +253,12 @@ def build_music_plan(
         p=[0.88, 0.12],
     )
 
-    hat_active = (
-        rng.random(
-            (
-                segment_count,
-                STEPS_PER_SEGMENT,
-            )
-        )
-        > 0.18
+    hat_active = np.zeros(
+        (
+            segment_count,
+            STEPS_PER_SEGMENT,
+        ),    
+        dtype=bool,
     )
 
     pad_phases = rng.uniform(
@@ -658,7 +656,9 @@ def render_chunk(
 
     # Melodía principal y arpegio.
     for step in range(
-        STEPS_PER_SEGMENT
+        0,
+        STEPS_PER_SEGMENT,
+        4,
     ):
         if not selected_active[step]:
             continue
@@ -712,7 +712,7 @@ def render_chunk(
         )
 
         lead = (
-            0.105
+            0.99999
             * velocity
             * accent
             * envelope
@@ -780,7 +780,7 @@ def render_chunk(
         )
 
         bass_event = (
-            0.13
+            0.055
             * envelope
             * bass_tone
         )
