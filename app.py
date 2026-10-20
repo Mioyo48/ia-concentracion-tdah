@@ -259,7 +259,10 @@ def render_chunk(
     """Renderiza un bloque de ocho segundos."""
 
     progression = plan["progression"]
-    segment_index = start_frame // SEGMENT_FRAMES
+
+    segment_index = (
+        start_frame // SEGMENT_FRAMES
+    )
 
     chord = progression[
         plan["chord_ids"][segment_index]
@@ -285,7 +288,6 @@ def render_chunk(
         dtype=np.float64,
     ) / SAMPLE_RATE
 
-    # Pads armónicos.
     amplitudes = [
         0.34,
         0.20,
@@ -339,7 +341,6 @@ def render_chunk(
             )
         )
 
-    # Pulso musical base a 120 BPM.
     root_frequency = midi_to_hz(
         chord[0] + 24
     )
@@ -365,7 +366,6 @@ def render_chunk(
         )
     )
 
-    # Motivo generativo con cambios cada medio segundo.
     notes_per_segment = int(
         SEGMENT_SECONDS / NOTE_SECONDS
     )
@@ -423,7 +423,6 @@ def render_chunk(
             )
         )
 
-    # Modulación beta continua.
     global_time = (
         start_frame
         + np.arange(frames)
@@ -443,7 +442,9 @@ def render_chunk(
         / SAMPLE_RATE
     )
 
-    beta_phase = float(phase[-1])
+    beta_phase = float(
+        phase[-1]
+    )
 
     beta_wave = (
         0.5
@@ -451,8 +452,6 @@ def render_chunk(
         * np.sin(phase)
     )
 
-    # Profundidad media: suficiente para estimular,
-    # sin producir un bombeo agresivo.
     beta_envelope = (
         0.60
         + 0.40
@@ -465,7 +464,6 @@ def render_chunk(
         + 0.19 * melody
     )
 
-    # AM aplicada sobre música, no sobre ruido puro.
     music *= beta_envelope
 
     texture = generate_texture(
@@ -478,15 +476,6 @@ def render_chunk(
         + 0.018 * texture
     )
 
-    # Suavizado analógico.
-    audio = np.tanh(
-       audio * 0.45
-    )
-
-    # Volumen maestro más bajo y limpio.
-    audio *= 0.55
-
-    # Fade inicial y final.
     fade_length = min(
         int(1.5 * SAMPLE_RATE),
         total_frames // 2,
@@ -514,10 +503,14 @@ def render_chunk(
     if end_frame > total_frames - fade_length:
         fade_out_start = max(
             0,
-            total_frames - fade_length - start_frame,
+            total_frames
+            - fade_length
+            - start_frame,
         )
 
-        fade_out_length = frames - fade_out_start
+        fade_out_length = (
+            frames - fade_out_start
+        )
 
         fade[fade_out_start:] *= np.linspace(
             1,
@@ -589,7 +582,6 @@ def generate_focus_wav(
     )
 
     output = io.BytesIO()
-
     beta_phase = 0.0
 
     with wave.open(output, "wb") as wav:
@@ -642,6 +634,7 @@ def generate_focus_wav(
 def format_time(seconds: int) -> str:
     minutes = seconds // 60
     remaining = seconds % 60
+
     return f"{minutes:02d}:{remaining:02d}"
 
 
@@ -768,7 +761,10 @@ if st.button(
             seed=seed,
             progress_callback=lambda value: progress_bar.progress(
                 int(value * 100),
-                text=f"Generando: {int(value * 100)}%",
+                text=(
+                    f"Generando: "
+                    f"{int(value * 100)}%"
+                ),
             ),
         )
 
@@ -779,10 +775,21 @@ if st.button(
     st.session_state["audio_duration"] = duration
 
 if "audio_bytes" in st.session_state:
-    audio_bytes = st.session_state["audio_bytes"]
-    audio_mode = st.session_state["audio_mode"]
-    audio_duration = st.session_state["audio_duration"]
-    generation_seed = st.session_state["generation_seed"]
+    audio_bytes = bytes(
+        st.session_state["audio_bytes"]
+    )
+
+    audio_mode = st.session_state[
+        "audio_mode"
+    ]
+
+    audio_duration = st.session_state[
+        "audio_duration"
+    ]
+
+    generation_seed = st.session_state[
+        "generation_seed"
+    ]
 
     st.success(
         "Composición creada: "
@@ -795,20 +802,30 @@ if "audio_bytes" in st.session_state:
         format="audio/wav",
     )
 
+    file_name = (
+        f"deep-focus-{audio_mode}-"
+        f"{audio_duration}s-"
+        f"{generation_seed}.wav"
+    )
+
     st.download_button(
-        "⬇️ Descargar composición WAV",
+        label="⬇️ Descargar composición WAV",
         data=audio_bytes,
-        file_name=(
-            f"deep-focus-{audio_mode}-"
-            f"{audio_duration}s-"
-            f"{generation_seed}.wav"
-        ),
+        file_name=file_name,
         mime="audio/wav",
+        key="download_focus_audio",
+        on_click="ignore",
         use_container_width=True,
     )
 
     st.caption(
-        f"Semilla de esta composición: {generation_seed}"
+        f"Tamaño del archivo: "
+        f"{len(audio_bytes) / 1_000_000:.1f} MB"
+    )
+
+    st.caption(
+        f"Semilla de esta composición: "
+        f"{generation_seed}"
     )
 
     st.subheader("Forma de onda")
