@@ -295,7 +295,7 @@ def synthesize_focus_audio(
         for note_index, note in enumerate(
             chord
         ):
-            frequency = midi_to_hz(note)
+            frequency = midi_to_hz(note + 12)
 
             phase_offset = rng.uniform(
                 0,
@@ -342,7 +342,7 @@ def synthesize_focus_audio(
 
         # Pulso musical de baja frecuencia.
         root_frequency = midi_to_hz(
-            chord[0] + 12
+            chord[0] + 24
         )
 
         rhythm[start:end] += (
@@ -400,7 +400,7 @@ def synthesize_focus_audio(
             ]
 
             melody_frequency = midi_to_hz(
-                selected_note + 12
+                selected_note + 24
             )
 
             note_duration = max(
@@ -444,8 +444,8 @@ def synthesize_focus_audio(
     beta_pulse = beta_pulse ** 1.7
 
     rhythm *= (
-        0.30
-        + 0.70 * beta_pulse
+        0.55
+        + 0.45 * beta_pulse
     )
 
     pad = normalize_signal(pad)
@@ -460,10 +460,22 @@ def synthesize_focus_audio(
     # Mezcla musical.
     # La textura ambiental queda muy baja para evitar sonido de viento.
     audio = (
-        0.48 * pad
-        + 0.30 * rhythm
-        + 0.19 * melody
+        0.56 * pad
+        + 0.17 * rhythm
+        + 0.24 * melody
         + 0.03 * texture
+    )
+    anti_boom_filter = signal.butter(
+        3,
+        110,
+        btype="highpass",
+        fs=SAMPLE_RATE,
+        output="sos",
+    )
+
+    audio = signal.sosfiltfilt(
+        anti_boom_filter,
+        audio,
     )
 
     # Fade de entrada y salida.
