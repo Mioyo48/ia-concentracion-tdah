@@ -5,10 +5,10 @@ import io
 from scipy.io import wavfile
 import random
 
-# 1. Configuración de la página (Súper Minimalista)
+# 1. Configuración de la página
 st.set_page_config(page_title="NeuralFocus Pro", page_icon="🧠", layout="centered")
 
-# 2. CSS Profesional (Sin errores de carga)
+# 2. CSS Profesional
 st.markdown("""
     <style>
     .main { background-color: #020617 !important; color: white !important; }
@@ -25,32 +25,32 @@ st.markdown("""
 st.title("🧠 NeuralFocus Pro")
 st.markdown("<p style='text-align:center; color:#94a3b8;'>Sincronización Neural Orgánica (Estilo Brain.fm)</p>", unsafe_allow_html=True)
 
-# 3. Motor de Audio (Sin pitidos, sin helicóptero)
+# 3. Motor de Audio (Modulación de Amplitud Neural)
 def generar_audio_brainfm(modo):
     duracion = 60 
     tasa_muestreo = 44100
     t = np.linspace(0, duracion, int(tasa_muestreo * duracion), endpoint=False)
 
-    # Capa de Ruido Base (Marrón + Rosa)
+    # Capa de Ruido Base (Marrón)
     blanco = np.random.normal(0, 1, len(t))
     b, a = signal.butter(1, 0.005, 'low')
     base_marron = signal.filtfilt(b, a, blanco)
     base_marron /= np.max(np.abs(base_marron))
 
-    # Lógica de Frecuencias Beta (Anti-sueño)
+    # Lógica de Frecuencias Beta
     if modo == "TDAH":
-        f_mod = random.uniform(18.0, 22.0) # Beta Alta - Alerta
+        f_mod = random.uniform(18.0, 22.0) 
         intensidad = 0.12 
     else:
-        f_mod = random.uniform(12.0, 15.0) # Beta Baja - Enfoque
+        f_mod = random.uniform(12.0, 15.0)
         intensidad = 0.08
 
-    # Modulación de Amplitud (El secreto de Brain.fm)
+    # Modulación de Amplitud (El efecto Brain.fm)
     modulador = 1 + intensidad * np.sin(2 * np.pi * f_mod * t)
     pulso_neural = base_marron * modulador
     pulso_neural /= np.max(np.abs(pulso_neural))
 
-    # Mezcla Final: 80% Base Constante + 20% Pulso (Cero efecto helicóptero)
+    # Mezcla Final: 80% Constante + 20% Pulso (Cero efecto helicóptero)
     audio_final = (base_marron * 0.8) + (pulso_neural * 0.2)
     audio_final /= np.max(np.abs(audio_final))
     
@@ -60,9 +60,8 @@ def generar_audio_brainfm(modo):
     wavfile.write(byte_io, tasa_muestreo, audio_int16)
     return byte_io.getvalue()
 
-# 4. Interfaz de Usuario (Sin errores de etiquetas)
+# 4. Interfaz de Usuario
 st.write("---")
-# Usamos un label real y lo ocultamos correctamente
 modo = st.radio(
     label="Seleccione el modo de enfoque", 
     options=["TDAH", "Normal"], 
@@ -85,4 +84,4 @@ with col2:
             st.audio(audio, format="audio/wav")
 
 st.write("---")
-st.markdown("<p style='text-align:center; color:#64748b; font-size:0.8rem;'>Sincronización de fase neural basada en ondas Beta.</p>", unsafe_//html=True)
+st.markdown("<p style='text-align:center; color:#64748b; font-size:0.8rem;'>Sincronización de fase neural basada en ondas Beta.</p>", unsafe_allow_html=True)
