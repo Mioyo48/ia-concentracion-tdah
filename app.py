@@ -527,7 +527,12 @@ def render_chunk(
 
     audio *= fade
 
-    # Imagen estéreo moderada.
+    audio = np.tanh(
+        audio * 0.45
+    )
+
+    audio *= 0.55
+
     side = (
         0.018
         * np.tanh(
