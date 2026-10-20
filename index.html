@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#020617">
+
+  <title>NeuroFocus · Deep Work Audio</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >
+
+  <style>
+    :root {
+      --ink: #e2e8f0;
+      --muted: #94a3b8;
+      --surface: rgba(15, 23, 42, 0.68);
+      --surface-light: rgba(30, 41, 59, 0.52);
+      --line: rgba(148, 163, 184, 0.18);
+      --sky: #38bdf8;
+      --sky-soft: #7dd3fc;
+      --rose: #f43f5e;
+      --shadow: 0 30px 90px rgba(0, 0, 0, 0.46);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(
+          circle at 14% 8%,
+          rgba(14, 165, 233, 0.18),
+          transparent 30%
+        ),
+        radial-gradient(
+          circle at 88% 84%,
+          rgba(244, 63, 94, 0.14),
+          transparent 32%
+        ),
+        radial-gradient(
+          circle at 50% 50%,
+          #1e293b 0%,
+          #0f172a 46%,
+          #020617 100%
+        );
+      font-family: "Inter", system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background-image:
+        linear-gradient(
+          rgba(148, 163, 184, 0.04) 1px,
+          transparent 1px
+        ),
+        linear-gradient(
+          90deg,
+          rgba(148, 163, 184, 0.04) 1px,
+          transparent 1px
+        );
+      background-size: 44px 44px;
+      mask-image: linear-gradient(
+        to bottom,
+        black,
+        transparent 72%
+      );
+      content: "";
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .page {
+      width: min(100% - 32px, 880px);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 30px 0;
+      display: grid;
+      align-items: center;
+    }
+
+    .shell {
+      position: relative;
+      padding: clamp(24px, 5vw, 58px);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 32px;
+      background:
+        linear-gradient(
+          145deg,
+          rgba(30, 41, 59, 0.76),
+          var(--surface)
+        );
+      box-shadow:
+        var(--shadow),
+        inset 0 1px rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(26px);
+      -webkit-backdrop-filter: blur(26px);
+    }
+
+    .shell::after {
+      position: absolute;
+      top: -130px;
+      right: -110px;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(56, 189, 248, 0.11);
+      filter: blur(6px);
+      content: "";
+      pointer-events: none;
+    }
+
+    .topline,
+    .mode-copy,
+    .player-top,
+    .player-actions,
+    .duration-head,
+    .status-line,
+    .footer-row {
+      display: flex;
+      align-items: center;
+    }
+
+    .topline {
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--sky-soft);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #cbd5e1;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--rose);
+      box-shadow: 0 0 14px var(--rose);
+    }
+
+    h1 {
+      max-width: 630px;
+      margin: 18px 0 14px;
+      font-size: clamp(2.6rem, 8vw, 5.5rem);
+      line-height: 0.98;
+      letter-spacing: -0.075em;
+    }
+
+    h1 span {
+      color: var(--sky-soft);
+      text-shadow: 0 0 34px rgba(56, 189, 248, 0.22);
+    }
+
+    .intro {
+      max-width: 530px;
+      margin: 0 0 38px;
+      color: var(--muted);
+      font-size: 0.98rem;
+      line-height: 1.7;
+    }
+
+    .section-label {
+      margin: 0 0 13px;
+      color: #cbd5e1;
+      font-size: 0.73rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .mode-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(2, 6, 23, 0.33);
+    }
+
+    .mode-button {
+      padding: 16px 17px;
+      border: 1px solid transparent;
+      border-radius: 13px;
+      color: var(--muted);
+      text-align: left;
+      background: transparent;
+      transition: 180ms ease;
+    }
+
+    .mode-button:hover {
+      color: var(--ink);
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .mode-button.active {
+      color: var(--ink);
+      border-color: rgba(56, 189, 248, 0.3);
+      background:
+        linear-gradient(
+          135deg,
+          rgba(56, 189, 248, 0.16),
+          rgba(30, 41, 59, 0.7)
+        );
+      box-shadow: 0 8px 24px rgba(2, 132, 199, 0.1);
+    }
+
+    .mode-copy {
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .mode-name {
+      display: block;
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+
+    .mode-range {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    .mode-icon {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 9px;
+      color: var(--sky-soft);
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .duration-block {
+      margin-top: 28px;
+    }
+
+    .duration-head {
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .duration-value {
+      color: var(--sky-soft);
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 5px;
+      margin: 13px 0 0;
+      border-radius: 999px;
+      outline: none;
+      appearance: none;
+      background: rgba(148, 163, 184, 0.2);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      width: 17px;
+      height: 17px;
+      border: 3px solid #082f49;
+      border-radius: 50%;
+      appearance: none;
+      background: var(--sky);
+      box-shadow:
+        0 0 0 4px rgba(56, 189, 248, 0.12),
+        0 0 18px rgba(56, 189, 248, 0.5);
+    }
+
+    .scale {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      color: #64748b;
+      font-size: 0.67rem;
+    }
+
+    .generate-button {
+      width: 100%;
+      margin: 32px 0 18px;
+      padding: 17px 20px;
+      border: 0;
+      border-radius: 15px;
+      color: #082f49;
+      font-weight: 800;
+      background: linear-gradient(
+        100deg,
+        var(--sky-soft),
+        var(--sky)
+      );
+      box-shadow: 0 12px 30px rgba(14, 165, 233, 0.22);
+      transition: 180ms ease;
+    }
+
+    .generate-button:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.06);
+      box-shadow: 0 17px 36px rgba(14, 165, 233, 0.34);
+    }
+
+    .generate-button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
+    .button-content {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .spinner {
+      display: none;
+      width: 15px;
+      height: 15px;
+      border: 2px solid rgba(8, 47, 73, 0.25);
+      border-top-color: #082f49;
+      border-radius: 50%;
+      animation: spin 700ms linear infinite;
+    }
+
+    .loading .spinner {
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .player {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(2, 6, 23, 0.38);
+    }
+
+    .player-top {
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .player-title {
+      margin: 0;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    .player-actions {
+      gap: 10px;
+    }
+
+    .play-button,
+    .download-button {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--ink);
+      background: var(--surface-light);
+      transition: 180ms ease;
+    }
+
+    .play-button:hover,
+    .download-button:hover {
+      border-color: rgba(56, 189, 248, 0.5);
+      color: var(--sky-soft);
+      transform: translateY(-2px);
+    }
+
+    .download-button.disabled {
+      pointer-events: none;
+      opacity: 0.35;
+    }
+
+    .progress-row {
+      display: grid;
+      grid-template-columns: 42px 1fr 42px;
+      gap: 12px;
+      align-items: center;
+      margin-top: 22px;
+    }
+
+    .time {
+      color: #64748b;
+      font-size: 0.68rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .time:last-child {
+      text-align: right;
+    }
+
+    #progress {
+      margin: 0;
+    }
+
+    .waveform {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 27px;
+      margin: 18px 0 2px;
+      opacity: 0.65;
+    }
+
+    .bar {
+      width: 3px;
+      border-radius: 4px;
+      background: linear-gradient(
+        to top,
+        var(--rose),
+        var(--sky)
+      );
+      animation: breathe 1.7s ease-in-out infinite alternate;
+      animation-play-state: paused;
+    }
+
+    .playing .bar {
+      animation-play-state: running;
+    }
+
+    .bar:nth-child(1) { height: 8px; }
+    .bar:nth-child(2) { height: 15px; }
+    .bar:nth-child(3) { height: 22px; }
+    .bar:nth-child(4) { height: 12px; }
+    .bar:nth-child(5) { height: 26px; }
+    .bar:nth-child(6) { height: 16px; }
+    .bar:nth-child(7) { height: 21px; }
+    .bar:nth-child(8) { height: 10px; }
+    .bar:nth-child(9) { height: 18px; }
+    .bar:nth-child(10) { height: 7px; }
+    .bar:nth-child(11) { height: 14px; }
+
+    @keyframes breathe {
+      to {
+        transform: scaleY(0.45);
+        opacity: 0.55;
+      }
+    }
+
+    .footer-row {
+      justify-content: space-between;
+      gap: 18px;
+      margin-top: 28px;
+      color: #64748b;
+      font-size: 0.68rem;
+      line-height: 1.5;
+    }
+
+    .status-line {
+      gap: 7px;
+    }
+
+    .status-line strong {
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    .footer-note {
+      text-align: right;
+    }
+
+    @media (max-width: 600px) {
+      .page {
+        width: min(100% - 20px, 880px);
+        padding: 10px 0;
+      }
+
+      .shell {
+        border-radius: 25px;
+      }
+
+      .mode-switch {
+        grid-template-columns: 1fr;
+      }
+
+      .footer-row {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .footer-note {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <section class="shell" aria-labelledby="page-title">
+      <div class="topline">
+        <p class="eyebrow">NeuroFocus / 01</p>
+
+        <span class="live">
+          <i class="live-dot"></i>
+          audio engine
+        </span>
+      </div>
+
+      <h1 id="page-title">
+        Entra en tu<br>
+        <span>zona profunda.</span>
+      </h1>
+
+      <p class="intro">
+        Texturas acústicas generativas diseñadas para acompañar
+        sesiones de concentración sostenida, sin melodías ni distracciones.
+      </p>
+
+      <p class="section-label">Perfil neural</p>
+
+      <div class="mode-switch" role="group">
+        <button
+          class="mode-button active"
+          data-mode="normal"
+          type="button"
+          aria-pressed="true"
+        >
+          <span class="mode-copy">
+            <span>
+              <span class="mode-name">Normal Focus</span>
+              <span class="mode-range">Beta sutil · 13–16 Hz</span>
+            </span>
+
+            <span class="mode-icon">◌</span>
+          </span>
+        </button>
+
+        <button
+          class="mode-button"
+          data-mode="adhd"
+          type="button"
+          aria-pressed="false"
+        >
+          <span class="mode-copy">
+            <span>
+              <span class="mode-name">ADHD Focus</span>
+              <span class="mode-range">Beta activa · 18–25 Hz</span>
+            </span>
+
+            <span class="mode-icon">✦</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="duration-block">
+        <div class="duration-head">
+          <label class="section-label" for="duration">
+            Duración de la sesión
+          </label>
+
+          <span class="duration-value" id="durationLabel">
+            01:00
+          </span>
+        </div>
+
+        <input
+          id="duration"
+          type="range"
+          min="5"
+          max="180"
+          value="60"
+          step="5"
+          aria-label="Duración en segundos"
+        >
+
+        <div class="scale">
+          <span>05 sec</span>
+          <span>03 min</span>
+        </div>
+      </div>
+
+      <button
+        class="generate-button"
+        id="generateButton"
+        type="button"
+      >
+        <span class="button-content">
+          <span class="spinner"></span>
+          <span id="buttonText">Generar sesión</span>
+          <span>↗</span>
+        </span>
+      </button>
+
+      <section class="player" aria-label="Reproductor de audio">
+        <div class="player-top">
+          <div>
+            <p class="player-title">Focus session</p>
+            <span class="status" id="status">
+              Lista para generar
+            </span>
+          </div>
+
+          <div class="player-actions">
+            <button
+              class="play-button"
+              id="playButton"
+              type="button"
+              aria-label="Reproducir"
+              disabled
+            >
+              ▶
+            </button>
+
+            <a
+              class="download-button disabled"
+              id="downloadButton"
+              href="#"
+              download="focus-session.wav"
+              aria-label="Descargar audio"
+            >
+              ↓
+            </a>
+          </div>
+        </div>
+
+        <div class="waveform" id="waveform">
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+          <i class="bar"></i>
+        </div>
+
+        <div class="progress-row">
+          <span class="time" id="currentTime">00:00</span>
+
+          <input
+            id="progress"
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            step="0.1"
+            disabled
+            aria-label="Progreso del audio"
+          >
+
+          <span class="time" id="totalTime">00:00</span>
+        </div>
+
+        <audio id="audio" preload="metadata"></audio>
+      </section>
+
+      <div class="footer-row">
+        <div class="status-line">
+          <span class="live-dot"></span>
+          <strong>Procesamiento local del servidor</strong>
+        </div>
+
+        <span class="footer-note">
+          Ruido marrón + rosa · AM no tonal
+        </span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      mode: "normal",
+      objectUrl: null
+    };
+
+    const audio = document.getElementById("audio");
+    const duration = document.getElementById("duration");
+    const durationLabel = document.getElementById("durationLabel");
+    const progress = document.getElementById("progress");
+    const currentTime = document.getElementById("currentTime");
+    const totalTime = document.getElementById("totalTime");
+    const status = document.getElementById("status");
+    const generateButton = document.getElementById("generateButton");
+    const buttonText = document.getElementById("buttonText");
+    const playButton = document.getElementById("playButton");
+    const downloadButton = document.getElementById("downloadButton");
+    const waveform = document.getElementById("waveform");
+
+    function formatTime(seconds) {
+      if (!Number.isFinite(seconds)) {
+        return "00:00";
+      }
+
+      const mins = Math.floor(seconds / 60)
+        .toString()
+        .padStart(2, "0");
+
+      const secs = Math.floor(seconds % 60)
+        .toString()
+        .padStart(2, "0");
+
+      return mins + ":" + secs;
+    }
+
+    function updateRangeFill(input) {
+      const min = Number(input.min || 0);
+      const max = Number(input.max || 100);
+
+      const value =
+        ((Number(input.value) - min) * 100) /
+        (max - min);
+
+      input.style.background =
+        "linear-gradient(90deg, var(--sky) " +
+        value +
+        "%, rgba(148, 163, 184, .2) " +
+        value +
+        "%)";
+    }
+
+    function setPlaying(isPlaying) {
+      playButton.textContent = isPlaying ? "Ⅱ" : "▶";
+      playButton.setAttribute(
+        "aria-label",
+        isPlaying ? "Pausar" : "Reproducir"
+      );
+
+      waveform.classList.toggle(
+        "playing",
+        isPlaying
+      );
+    }
+
+    duration.addEventListener("input", () => {
+      durationLabel.textContent =
+        formatTime(Number(duration.value));
+
+      updateRangeFill(duration);
+    });
+
+    document
+      .querySelectorAll(".mode-button")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          state.mode = button.dataset.mode;
+
+          document
+            .querySelectorAll(".mode-button")
+            .forEach((item) => {
+              const selected = item === button;
+
+              item.classList.toggle(
+                "active",
+                selected
+              );
+
+              item.setAttribute(
+                "aria-pressed",
+                selected ? "true" : "false"
+              );
+            });
+
+          status.textContent =
+            state.mode === "adhd"
+              ? "Perfil ADHD seleccionado"
+              : "Perfil normal seleccionado";
+        });
+      });
+
+    playButton.addEventListener("click", () => {
+      if (!audio.src) {
+        return;
+      }
+
+      if (audio.paused) {
+        audio.play();
+      } else {
+        audio.pause();
+      }
+    });
+
+    progress.addEventListener("input", () => {
+      if (audio.duration) {
+        audio.currentTime =
+          (Number(progress.value) / 100) *
+          audio.duration;
+      }
+    });
+
+    audio.addEventListener("loadedmetadata", () => {
+      totalTime.textContent =
+        formatTime(audio.duration);
+
+      progress.disabled = false;
+    });
+
+    audio.addEventListener("timeupdate", () => {
+      const value = audio.duration
+        ? (audio.currentTime / audio.duration) * 100
+        : 0;
+
+      progress.value = value;
+      currentTime.textContent =
+        formatTime(audio.currentTime);
+
+      updateRangeFill(progress);
+    });
+
+    audio.addEventListener("play", () => {
+      setPlaying(true);
+    });
+
+    audio.addEventListener("pause", () => {
+      setPlaying(false);
+    });
+
+    audio.addEventListener("ended", () => {
+      setPlaying(false);
+      progress.value = 0;
+      currentTime.textContent = "00:00";
+      updateRangeFill(progress);
+    });
+
+    generateButton.addEventListener(
+      "click",
+      async () => {
+        generateButton.disabled = true;
+        generateButton.classList.add("loading");
+        buttonText.textContent = "Sintetizando";
+        status.textContent =
+          "Construyendo textura acústica…";
+
+        try {
+          const response = await fetch(
+            "/generate",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                mode: state.mode,
+                duration: Number(duration.value)
+              })
+            }
+          );
+
+          if (!response.ok) {
+            const data =
+              await response
+                .json()
+                .catch(() => ({}));
+
+            throw new Error(
+              data.error ||
+              "No se pudo generar el audio."
+            );
+          }
+
+          const blob =
+            await response.blob();
+
+          if (state.objectUrl) {
+            URL.revokeObjectURL(
+              state.objectUrl
+            );
+          }
+
+          state.objectUrl =
+            URL.createObjectURL(blob);
+
+          audio.src = state.objectUrl;
+          audio.load();
+
+          downloadButton.href =
+            state.objectUrl;
+
+          downloadButton.download =
+            "neurofocus-" +
+            state.mode +
+            "-" +
+            duration.value +
+            "s.wav";
+
+          downloadButton.classList.remove(
+            "disabled"
+          );
+
+          playButton.disabled = false;
+
+          status.textContent =
+            "Sesión lista · reproducción iniciada";
+
+          await audio.play();
+        } catch (error) {
+          status.textContent =
+            error.message ||
+            "Error inesperado al generar la sesión.";
+        } finally {
+          generateButton.disabled = false;
+          generateButton.classList.remove("loading");
+          buttonText.textContent =
+            "Generar sesión";
+        }
+      }
+    );
+
+    updateRangeFill(duration);
+    updateRangeFill(progress);
+  </script>
+</body>
+</html>
