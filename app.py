@@ -479,9 +479,12 @@ def render_chunk(
     )
 
     # Suavizado analógico.
-    audio = np.tanh(
-        audio * 0.75
+   audio = np.tanh(
+       audio * 0.45
     )
+
+    # Volumen maestro más bajo y limpio.
+    audio *= 0.55
 
     # Fade inicial y final.
     fade_length = min(
@@ -526,10 +529,10 @@ def render_chunk(
 
     # Imagen estéreo moderada.
     side = (
-        0.035
+        0.018
         * np.tanh(
-            0.7 * melody
-            + 0.3 * rhythm
+            0.5 * melody
+            + 0.2 * rhythm
         )
     )
 
@@ -540,10 +543,19 @@ def render_chunk(
         (left, right)
     )
 
+    peak = np.max(
+        np.abs(stereo)
+    )
+
+    target_peak = 0.24
+
+    if peak > target_peak:
+        stereo *= target_peak / peak
+
     stereo = np.clip(
         stereo,
-        -0.85,
-        0.85,
+        -0.24,
+        0.24,
     )
 
     return stereo, beta_phase
