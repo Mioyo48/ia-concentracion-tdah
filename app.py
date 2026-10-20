@@ -11,12 +11,16 @@ from scipy import signal
 
 SAMPLE_RATE = 22_050
 MAX_DURATION = 20 * 60
+
 CHUNK_SECONDS = 8
-NOTE_SECONDS = 0.5
 SEGMENT_SECONDS = 8
+STEP_SECONDS = 0.5
+STEPS_PER_SEGMENT = 16
 
 CHUNK_FRAMES = SAMPLE_RATE * CHUNK_SECONDS
-SEGMENT_FRAMES = int(SAMPLE_RATE * SEGMENT_SECONDS)
+SEGMENT_FRAMES = int(
+    SAMPLE_RATE * SEGMENT_SECONDS
+)
 
 
 st.set_page_config(
@@ -100,14 +104,19 @@ st.markdown(
 
 
 def normalize(audio: np.ndarray) -> np.ndarray:
-    audio = np.asarray(audio, dtype=np.float32)
+    audio = np.asarray(
+        audio,
+        dtype=np.float32,
+    )
 
     if audio.size == 0:
         return audio
 
     audio = audio - np.mean(audio)
 
-    rms = np.sqrt(np.mean(audio ** 2))
+    rms = np.sqrt(
+        np.mean(audio ** 2)
+    )
 
     if rms < 1e-8:
         return np.zeros_like(audio)
@@ -116,7 +125,9 @@ def normalize(audio: np.ndarray) -> np.ndarray:
 
 
 def midi_to_hz(note: float) -> float:
-    return 440.0 * (2.0 ** ((note - 69.0) / 12.0))
+    return 440.0 * (
+        2.0 ** ((note - 69.0) / 12.0)
+    )
 
 
 def build_music_plan(
@@ -125,14 +136,11 @@ def build_music_plan(
     rng: np.random.Generator,
 ) -> dict:
     """
-    Crea una planificación musical diferente en cada generación.
+    Crea la composición musical completa.
 
-    Incluye:
-    - Cambios de acordes sin repetir inmediatamente.
-    - Microvariaciones de tiempo.
-    - Silencios aleatorios.
-    - Velocidades diferentes.
-    - Modulación beta variable.
+    La canción utiliza una progresión armónica,
+    bajo, melodía, arpegios y batería electrónica
+    suave. Cada semilla genera una canción diferente.
     """
 
     progression = [
@@ -153,10 +161,6 @@ def build_music_plan(
                 total_frames / SEGMENT_FRAMES
             )
         ),
-    )
-
-    notes_per_segment = int(
-        SEGMENT_SECONDS / NOTE_SECONDS
     )
 
     chord_ids = np.empty(
@@ -182,69 +186,81 @@ def build_music_plan(
             available
         )
 
-    # Esta variable corrige el KeyError:
-    # render_chunk() la utiliza para escoger las notas.
     note_choices = rng.integers(
         0,
         4,
         size=(
             segment_count,
-            notes_per_segment,
+            STEPS_PER_SEGMENT,
         ),
     )
 
-    # Algunos eventos descansan para evitar
-    # que todo suene mecánico y repetitivo.
     note_active = (
         rng.random(
             (
                 segment_count,
-                notes_per_segment,
+                STEPS_PER_SEGMENT,
             )
         )
-        > 0.08
+        > 0.14
     )
 
-    # Pequeñas variaciones de tiempo.
-    note_starts = np.clip(
+    note_lengths = np.clip(
+        rng.normal(
+            0.34,
+            0.055,
+            (
+                segment_count,
+                STEPS_PER_SEGMENT,
+            ),
+        ),
+        0.20,
+        0.46,
+    )
+
+    note_velocities = np.clip(
+        rng.normal(
+            0.88,
+            0.15,
+            (
+                segment_count,
+                STEPS_PER_SEGMENT,
+            ),
+        ),
+        0.50,
+        1.18,
+    )
+
+    note_offsets = np.clip(
         rng.normal(
             0.0,
             0.018,
             (
                 segment_count,
-                notes_per_segment,
+                STEPS_PER_SEGMENT,
             ),
         ),
-        -0.04,
-        0.04,
+        -0.045,
+        0.045,
     )
 
-    # Duraciones variables para evitar notas idénticas.
-    note_lengths = np.clip(
-        rng.normal(
-            0.39,
-            0.05,
-            (
-                segment_count,
-                notes_per_segment,
-            ),
+    lead_octaves = rng.choice(
+        [24, 36],
+        size=(
+            segment_count,
+            STEPS_PER_SEGMENT,
         ),
-        0.26,
-        0.49,
+        p=[0.88, 0.12],
     )
 
-    # Variaciones de intensidad.
-    note_velocities = np.clip(
-        rng.normal(
-            0.96,
-            0.11,
+    hat_active = (
+        rng.random(
             (
                 segment_count,
-                notes_per_segment,
-            ),
-        ),
-        0.70,
-        1.18,
+                STEPS_PER_SEGMENT,
+            )
+        )
+        > 0.18
     )
 
     pad_phases = rng.uniform(
@@ -261,18 +277,20 @@ def build_music_plan(
         2 * np.pi,
         (
             segment_count,
-            notes_per_segment,
+            STEPS_PER_SEGMENT,
         ),
     )
 
     if mode == "adhd":
-        beta_low = 14.5
-        beta_high = 17.5
+        beta_low = 15.0
+        beta_high = 18.0
     else:
-        beta_low = 11.5
-        beta_high = 14.5
+        beta_low = 12.0
+        beta_high = 15.0
 
-    total_seconds = total_frames / SAMPLE_RATE
+    total_seconds = (
+        total_frames / SAMPLE_RATE
+    )
 
     control_count = max(
         4,
@@ -291,24 +309,20 @@ def build_music_plan(
         control_count,
     )
 
-    macro_phase = rng.uniform(
-        0,
-        2 * np.pi,
-    )
-
     return {
         "progression": progression,
         "chord_ids": chord_ids,
         "note_choices": note_choices,
         "note_active": note_active,
-        "note_starts": note_starts,
         "note_lengths": note_lengths,
         "note_velocities": note_velocities,
+        "note_offsets": note_offsets,
+        "lead_octaves": lead_octaves,
+        "hat_active": hat_active,
         "pad_phases": pad_phases,
         "melody_phases": melody_phases,
         "beta_control_times": beta_control_times,
         "beta_frequencies": beta_frequencies,
-        "macro_phase": macro_phase,
     }
 
 
@@ -317,17 +331,17 @@ def generate_texture(
     rng: np.random.Generator,
 ) -> np.ndarray:
     """
-    Textura muy suave y filtrada.
-    Se mantiene baja para evitar sonido de viento saturado.
+    Textura ambiental casi imperceptible.
+    Se utiliza muy poco para no crear ruido de viento.
     """
 
-    white = rng.standard_normal(
+    noise = rng.standard_normal(
         length
     ).astype(np.float32)
 
     texture_filter = signal.butter(
         2,
-        [220, 3_500],
+        [300, 4_000],
         btype="bandpass",
         fs=SAMPLE_RATE,
         output="sos",
@@ -335,7 +349,7 @@ def generate_texture(
 
     texture = signal.sosfiltfilt(
         texture_filter,
-        white,
+        noise,
     )
 
     return normalize(texture)
@@ -350,32 +364,23 @@ def render_chunk(
     beta_phase: float,
 ) -> tuple[np.ndarray, float]:
     """
-    Renderiza un bloque de audio con:
-    - Pads armónicos.
-    - Pulsos musicales.
-    - Motivos melódicos.
-    - Modulación beta suave.
-    - Variaciones aleatorias.
+    Renderiza un bloque musical de ocho segundos.
     """
-
-    progression = plan["progression"]
 
     segment_index = min(
         start_frame // SEGMENT_FRAMES,
         len(plan["chord_ids"]) - 1,
     )
 
+    progression = plan["progression"]
+
     chord = progression[
         plan["chord_ids"][segment_index]
     ]
 
-    segment_offset_frames = (
+    segment_offset = (
         start_frame % SEGMENT_FRAMES
-    )
-
-    segment_offset_seconds = (
-        segment_offset_frames / SAMPLE_RATE
-    )
+    ) / SAMPLE_RATE
 
     local_time = (
         np.arange(
@@ -386,8 +391,7 @@ def render_chunk(
     )
 
     segment_time = (
-        segment_offset_seconds
-        + local_time
+        segment_offset + local_time
     )
 
     pad = np.zeros(
@@ -395,7 +399,7 @@ def render_chunk(
         dtype=np.float32,
     )
 
-    rhythm = np.zeros(
+    bass = np.zeros(
         frames,
         dtype=np.float32,
     )
@@ -404,6 +408,60 @@ def render_chunk(
         frames,
         dtype=np.float32,
     )
+
+    drums = np.zeros(
+        frames,
+        dtype=np.float32,
+    )
+
+    def warm_tone(
+        frequency: float,
+        times: np.ndarray,
+        phase: float,
+    ) -> np.ndarray:
+        """
+        Timbre cálido con varias armónicas.
+        Esto evita que cada nota parezca un pitido puro.
+        """
+
+        base_phase = (
+            2
+            * np.pi
+            * frequency
+            * times
+            + phase
+        )
+
+        tone = (
+            0.58
+            * np.sin(base_phase)
+        )
+
+        tone += (
+            0.20
+            * np.sin(
+                base_phase * 1.002
+                + 0.35
+            )
+        )
+
+        tone += (
+            0.14
+            * np.sin(
+                base_phase * 2.0
+            )
+        )
+
+        tone += (
+            0.06
+            * np.sin(
+                base_phase * 3.0
+            )
+        )
+
+        return tone.astype(
+            np.float32
+        )
 
     def render_pad(
         pad_chord: list[int],
@@ -416,8 +474,8 @@ def render_chunk(
         )
 
         amplitudes = [
-            0.28,
-            0.17,
+            0.25,
+            0.16,
             0.10,
             0.06,
         ]
@@ -429,45 +487,32 @@ def render_chunk(
                 note + 12
             )
 
-            phase_offset = phases[
+            phase = phases[
                 note_index
             ]
 
             movement = (
-                0.92
-                + 0.08
+                0.93
+                + 0.07
                 * np.sin(
                     2
                     * np.pi
-                    * 0.07
+                    * 0.06
                     * times
-                    + phase_offset
+                    + phase
                 )
+            )
+
+            tone = warm_tone(
+                frequency,
+                times,
+                phase,
             )
 
             output += (
                 amplitudes[note_index]
                 * movement
-                * np.sin(
-                    2
-                    * np.pi
-                    * frequency
-                    * times
-                    + phase_offset
-                )
-            )
-
-            output += (
-                amplitudes[note_index]
-                * 0.08
-                * np.sin(
-                    2
-                    * np.pi
-                    * frequency
-                    * 2
-                    * times
-                    + phase_offset
-                )
+                * tone
             )
 
         return output
@@ -478,8 +523,6 @@ def render_chunk(
         segment_time,
     )
 
-    # Crossfade entre acordes para que los cambios
-    # no suenen cortados ni robóticos.
     if segment_index > 0:
         previous_chord = progression[
             plan["chord_ids"][segment_index - 1]
@@ -491,10 +534,8 @@ def render_chunk(
             segment_time + SEGMENT_SECONDS,
         )
 
-        crossfade_length = 1.2
-
         crossfade = np.clip(
-            segment_time / crossfade_length,
+            segment_time / 1.2,
             0.0,
             1.0,
         )
@@ -506,9 +547,86 @@ def render_chunk(
     else:
         pad = current_pad
 
-    notes_per_segment = int(
-        SEGMENT_SECONDS / NOTE_SECONDS
-    )
+    def make_envelope(
+        duration: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        sample_count = max(
+            1,
+            int(
+                duration * SAMPLE_RATE
+            ),
+        )
+
+        times = (
+            np.arange(
+                sample_count,
+                dtype=np.float64,
+            )
+            / SAMPLE_RATE
+        )
+
+        position = np.clip(
+            times / duration,
+            0.0,
+            1.0,
+        )
+
+        envelope = (
+            np.sin(
+                np.pi * position
+            )
+            ** 2
+        )
+
+        return times, envelope
+
+    def add_event(
+        target: np.ndarray,
+        start_seconds: float,
+        values: np.ndarray,
+    ) -> None:
+        start_index = int(
+            np.floor(
+                (
+                    start_seconds
+                    - segment_offset
+                )
+                * SAMPLE_RATE
+            )
+        )
+
+        end_index = (
+            start_index + len(values)
+        )
+
+        clipped_start = max(
+            0,
+            start_index,
+        )
+
+        clipped_end = min(
+            frames,
+            end_index,
+        )
+
+        if clipped_end <= clipped_start:
+            return
+
+        source_start = (
+            clipped_start - start_index
+        )
+
+        source_end = (
+            source_start
+            + clipped_end
+            - clipped_start
+        )
+
+        target[
+            clipped_start:clipped_end
+        ] += values[
+            source_start:source_end
+        ]
 
     selected_choices = plan[
         "note_choices"
@@ -516,10 +634,6 @@ def render_chunk(
 
     selected_active = plan[
         "note_active"
-    ][segment_index]
-
-    selected_starts = plan[
-        "note_starts"
     ][segment_index]
 
     selected_lengths = plan[
@@ -530,216 +644,335 @@ def render_chunk(
         "note_velocities"
     ][segment_index]
 
+    selected_offsets = plan[
+        "note_offsets"
+    ][segment_index]
+
+    selected_octaves = plan[
+        "lead_octaves"
+    ][segment_index]
+
     selected_phases = plan[
         "melody_phases"
     ][segment_index]
 
-    root_frequency = midi_to_hz(
-        chord[0] + 12
-    )
-
-    for note_index in range(
-        notes_per_segment
+    # Melodía principal y arpegio.
+    for step in range(
+        STEPS_PER_SEGMENT
     ):
-        if not selected_active[note_index]:
+        if not selected_active[step]:
             continue
 
-        note_start = (
-            note_index * NOTE_SECONDS
+        start_seconds = (
+            step * STEP_SECONDS
             + float(
-                selected_starts[note_index]
+                selected_offsets[step]
             )
         )
 
-        note_duration = float(
-            selected_lengths[note_index]
-        )
-
-        note_end = (
-            note_start + note_duration
-        )
-
-        relative_start = int(
-            np.floor(
-                (
-                    note_start
-                    - segment_offset_seconds
-                )
-                * SAMPLE_RATE
-            )
-        )
-
-        relative_end = int(
-            np.ceil(
-                (
-                    note_end
-                    - segment_offset_seconds
-                )
-                * SAMPLE_RATE
-            )
-        )
-
-        clip_start = max(
-            0,
-            relative_start,
-        )
-
-        clip_end = min(
-            frames,
-            relative_end,
-        )
-
-        if clip_end <= clip_start:
-            continue
-
-        event_time = (
-            segment_offset_seconds
-            + np.arange(
-                clip_start,
-                clip_end,
-                dtype=np.float64,
-            )
-            / SAMPLE_RATE
-        )
-
-        elapsed = (
-            event_time - note_start
-        )
-
-        normalized_elapsed = np.clip(
-            elapsed / note_duration,
-            0.0,
-            1.0,
-        )
-
-        envelope = (
-            np.sin(
-                np.pi
-                * normalized_elapsed
-            )
-            ** 2
+        duration = float(
+            selected_lengths[step]
         )
 
         velocity = float(
-            selected_velocities[note_index]
+            selected_velocities[step]
         )
 
-        phase_offset = float(
-            selected_phases[note_index]
+        note_index = int(
+            selected_choices[step]
         )
 
-        selected_note = chord[
-            int(
-                selected_choices[note_index]
-            )
-        ]
-
-        melody_frequency = midi_to_hz(
-            selected_note + 24
+        octave = int(
+            selected_octaves[step]
         )
 
-        melody_slice = (
-            0.12
+        frequency = midi_to_hz(
+            chord[note_index] + octave
+        )
+
+        phase = float(
+            selected_phases[step]
+        )
+
+        times, envelope = make_envelope(
+            duration
+        )
+
+        tone = warm_tone(
+            frequency,
+            times,
+            phase,
+        )
+
+        # Pequeño acento cada cuatro pasos.
+        accent = (
+            1.08
+            if step % 4 == 0
+            else 0.84
+        )
+
+        lead = (
+            0.105
             * velocity
+            * accent
             * envelope
+            * tone
+        )
+
+        add_event(
+            melody,
+            start_seconds,
+            lead,
+        )
+
+    # Bajo musical en negras y contratiempos.
+    for step in range(
+        0,
+        STEPS_PER_SEGMENT,
+        2,
+    ):
+        start_seconds = (
+            step * STEP_SECONDS
+        )
+
+        duration = 0.46
+
+        if (step // 2) % 2 == 0:
+            bass_note = chord[0]
+        else:
+            bass_note = chord[2] - 12
+
+        frequency = midi_to_hz(
+            bass_note
+        )
+
+        times, envelope = make_envelope(
+            duration
+        )
+
+        bass_phase = (
+            plan["melody_phases"]
+            [segment_index][step]
+            * 0.3
+        )
+
+        bass_tone = (
+            0.72
             * np.sin(
                 2
                 * np.pi
-                * melody_frequency
-                * elapsed
-                + phase_offset
+                * frequency
+                * times
+                + bass_phase
             )
         )
 
-        melody_slice += (
-            0.018
-            * velocity
-            * envelope
+        bass_tone += (
+            0.20
             * np.sin(
                 2
                 * np.pi
-                * melody_frequency
+                * frequency
                 * 2
-                * elapsed
-                + phase_offset
+                * times
+                + bass_phase
             )
         )
 
-        melody[
-            clip_start:clip_end
-        ] += melody_slice.astype(
-            np.float32
+        bass_event = (
+            0.13
+            * envelope
+            * bass_tone
         )
 
-        # Pulso musical breve, con acentos
-        # diferentes para mayor energía.
-        pulse_duration = min(
-            0.32,
-            max(
-                0.16,
-                note_duration * 0.80,
+        add_event(
+            bass,
+            start_seconds,
+            bass_event.astype(
+                np.float32
             ),
         )
 
-        pulse_position = np.clip(
-            elapsed / pulse_duration,
-            0.0,
-            1.0,
+    # Batería electrónica muy suave.
+    for step in range(
+        STEPS_PER_SEGMENT
+    ):
+        start_seconds = (
+            step * STEP_SECONDS
         )
 
-        pulse_envelope = (
-            np.sin(
-                np.pi
-                * pulse_position
+        beat_position = step % 4
+
+        # Kick en tiempos principales.
+        if beat_position in (0, 2):
+            duration = 0.22
+
+            times = (
+                np.arange(
+                    int(
+                        duration
+                        * SAMPLE_RATE
+                    ),
+                    dtype=np.float64,
+                )
+                / SAMPLE_RATE
             )
-            ** 2
-        )
 
-        pulse_envelope[
-            elapsed > pulse_duration
-        ] = 0.0
-
-        accent = (
-            1.10
-            if note_index % 4 == 0
-            else 0.82
-        )
-
-        pulse_slice = (
-            0.15
-            * velocity
-            * accent
-            * pulse_envelope
-            * np.sin(
-                2
-                * np.pi
-                * root_frequency
-                * elapsed
-                + phase_offset * 0.35
+            position = np.clip(
+                times / duration,
+                0.0,
+                1.0,
             )
-        )
 
-        pulse_slice += (
-            0.035
-            * velocity
-            * pulse_envelope
-            * np.sin(
-                2
-                * np.pi
-                * root_frequency
-                * 1.5
-                * elapsed
-                + phase_offset
+            frequency = (
+                125.0
+                - 72.0 * position
             )
-        )
 
-        rhythm[
-            clip_start:clip_end
-        ] += pulse_slice.astype(
-            np.float32
-        )
+            envelope = (
+                np.exp(-16.0 * times)
+                * (
+                    np.sin(
+                        np.pi * position
+                    )
+                    ** 0.45
+                )
+            )
 
-    # Modulación beta continua con ligera deriva.
+            kick = (
+                0.105
+                * envelope
+                * np.sin(
+                    2
+                    * np.pi
+                    * frequency
+                    * times
+                )
+            )
+
+            add_event(
+                drums,
+                start_seconds,
+                kick.astype(
+                    np.float32
+                ),
+            )
+
+        # Golpe de caja suave en el tercer tiempo.
+        if beat_position == 2:
+            duration = 0.16
+
+            sample_count = int(
+                duration
+                * SAMPLE_RATE
+            )
+
+            noise = rng.standard_normal(
+                sample_count
+            ).astype(np.float32)
+
+            snare_filter = signal.butter(
+                2,
+                [900, 6_500],
+                btype="bandpass",
+                fs=SAMPLE_RATE,
+                output="sos",
+            )
+
+            noise = signal.sosfilt(
+                snare_filter,
+                noise,
+            )
+
+            noise = normalize(
+                noise
+            )
+
+            times = (
+                np.arange(
+                    sample_count,
+                    dtype=np.float64,
+                )
+                / SAMPLE_RATE
+            )
+
+            envelope = np.exp(
+                -25.0 * times
+            )
+
+            snare = (
+                0.025
+                * noise
+                * envelope
+            )
+
+            add_event(
+                drums,
+                start_seconds,
+                snare.astype(
+                    np.float32
+                ),
+            )
+
+        # Hi-hats cortos y aleatorios.
+        if plan[
+            "hat_active"
+        ][segment_index][step]:
+            duration = 0.075
+
+            sample_count = int(
+                duration
+                * SAMPLE_RATE
+            )
+
+            noise = rng.standard_normal(
+                sample_count
+            ).astype(np.float32)
+
+            hat_filter = signal.butter(
+                2,
+                [5_000, 9_000],
+                btype="bandpass",
+                fs=SAMPLE_RATE,
+                output="sos",
+            )
+
+            noise = signal.sosfilt(
+                hat_filter,
+                noise,
+            )
+
+            noise = normalize(
+                noise
+            )
+
+            times = (
+                np.arange(
+                    sample_count,
+                    dtype=np.float64,
+                )
+                / SAMPLE_RATE
+            )
+
+            envelope = np.exp(
+                -48.0 * times
+            )
+
+            hat = (
+                0.008
+                * noise
+                * envelope
+            )
+
+            add_event(
+                drums,
+                start_seconds + 0.02,
+                hat.astype(
+                    np.float32
+                ),
+            )
+
+    # Modulación beta continua y variable.
     global_time = (
         start_frame
         + np.arange(frames)
@@ -769,19 +1002,21 @@ def render_chunk(
         * np.sin(phase)
     )
 
-    # Profundidad moderada para evitar
-    # bombeo o efecto helicóptero.
-    beta_envelope = (
-        0.78
-        + 0.22
+    # AM sutil para evitar bombeo.
+    modulation = (
+        0.86
+        + 0.14
         * beta_wave
     )
 
     music = (
-        0.50 * pad
-        + 0.28 * rhythm * beta_envelope
-        + 0.22 * melody * beta_envelope
+        0.48 * pad
+        + 0.17 * bass
+        + 0.22 * melody
+        + 0.13 * drums
     )
+
+    music *= modulation
 
     texture = generate_texture(
         frames,
@@ -790,7 +1025,48 @@ def render_chunk(
 
     audio = (
         music
-        + 0.006 * texture
+        + 0.0025 * texture
+    )
+
+    # Reverberación corta para que suene
+    # más musical y menos seco.
+    reverb = np.zeros_like(
+        audio
+    )
+
+    for delay_seconds, gain in [
+        (0.13, 0.13),
+        (0.27, 0.08),
+        (0.41, 0.045),
+    ]:
+        delay = int(
+            delay_seconds
+            * SAMPLE_RATE
+        )
+
+        if delay < frames:
+            reverb[delay:] += (
+                audio[:-delay]
+                * gain
+            )
+
+    audio = (
+        0.91 * audio
+        + 0.09 * reverb
+    )
+
+    # Suavizado final.
+    master_filter = signal.butter(
+        2,
+        8_000,
+        btype="lowpass",
+        fs=SAMPLE_RATE,
+        output="sos",
+    )
+
+    audio = signal.sosfiltfilt(
+        master_filter,
+        audio,
     )
 
     # Fade inicial y final.
@@ -816,7 +1092,9 @@ def render_chunk(
             fade_in_length,
         ).astype(np.float32)
 
-    end_frame = start_frame + frames
+    end_frame = (
+        start_frame + frames
+    )
 
     if end_frame > total_frames - fade_length:
         fade_out_start = max(
@@ -838,20 +1116,19 @@ def render_chunk(
 
     audio *= fade
 
-    # Saturación muy ligera para suavizar
-    # sin destruir el rango dinámico.
+    # Saturación muy ligera.
     audio = np.tanh(
-        audio * 0.60
+        audio * 0.72
     )
 
-    audio *= 0.58
+    audio *= 0.62
 
-    # Estéreo sutil.
+    # Imagen estéreo sutil.
     side = (
         0.018
         * np.tanh(
             0.5 * melody
-            + 0.15 * pad
+            + 0.18 * pad
         )
     )
 
@@ -866,7 +1143,7 @@ def render_chunk(
         np.abs(stereo)
     )
 
-    target_peak = 0.24
+    target_peak = 0.25
 
     if peak > target_peak:
         stereo *= (
@@ -875,13 +1152,14 @@ def render_chunk(
 
     stereo = np.clip(
         stereo,
-        -0.24,
-        0.24,
+        -0.25,
+        0.25,
     )
 
-    return stereo.astype(
-        np.float32
-    ), beta_phase
+    return (
+        stereo.astype(np.float32),
+        beta_phase,
+    )
 
 
 def generate_focus_wav(
@@ -890,8 +1168,6 @@ def generate_focus_wav(
     seed: int,
     progress_callback=None,
 ) -> bytes:
-    """Genera un archivo WAV estéreo de hasta 20 minutos."""
-
     total_frames = int(
         duration * SAMPLE_RATE
     )
@@ -957,18 +1233,9 @@ def generate_focus_wav(
     return output.getvalue()
 
 
-def format_time(seconds: int) -> str:
-    minutes = seconds // 60
-    remaining = seconds % 60
-
-    return f"{minutes:02d}:{remaining:02d}"
-
-
 def extract_preview(
     audio_bytes: bytes,
 ) -> np.ndarray:
-    """Extrae muestras para mostrar la forma de onda."""
-
     raw = np.frombuffer(
         audio_bytes[44:],
         dtype=np.int16,
@@ -1001,6 +1268,13 @@ def extract_preview(
     return left[indexes]
 
 
+def format_time(seconds: int) -> str:
+    minutes = seconds // 60
+    remaining = seconds % 60
+
+    return f"{minutes:02d}:{remaining:02d}"
+
+
 st.markdown(
     """
     <section class="hero">
@@ -1014,9 +1288,9 @@ st.markdown(
         </h1>
 
         <p class="description">
-            Música generativa original con pads armónicos,
-            pulsos musicales, variaciones melódicas y modulación
-            beta suave para sesiones de concentración.
+            Música generativa original con acordes,
+            bajo, melodía, arpegios, batería electrónica
+            suave y modulación dinámica.
         </p>
     </section>
     """,
@@ -1055,9 +1329,8 @@ mode = (
 st.markdown(
     """
     <div class="notice">
-        Cada generación utiliza una semilla aleatoria nueva.
-        La misma configuración produce una composición diferente
-        cada vez.
+        Cada generación produce una composición musical
+        diferente aunque mantengas la misma configuración.
     </div>
     """,
     unsafe_allow_html=True,
@@ -1080,7 +1353,7 @@ if st.button(
     )
 
     with st.spinner(
-        "Generando audio por bloques..."
+        "Generando música..."
     ):
         audio_bytes = generate_focus_wav(
             duration=duration,
@@ -1152,8 +1425,7 @@ if "audio_bytes" in st.session_state:
     )
 
     st.caption(
-        f"Semilla de esta composición: "
-        f"{generation_seed}"
+        f"Semilla: {generation_seed}"
     )
 
     st.subheader("Forma de onda")
@@ -1167,6 +1439,6 @@ if "audio_bytes" in st.session_state:
 st.divider()
 
 st.caption(
-    "Audio procedural original. "
+    "Audio procedural original para uso creativo. "
     "No es un tratamiento médico para el TDAH."
 )
