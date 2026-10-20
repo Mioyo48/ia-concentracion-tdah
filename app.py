@@ -14,7 +14,7 @@ MAX_DURATION = 180
 
 
 st.set_page_config(
-    page_title="NeuroFocus",
+    page_title="NeuroFocus Deep Focus",
     page_icon="🎧",
     layout="centered",
 )
@@ -94,14 +94,14 @@ st.markdown(
 
 
 def normalize_signal(audio: np.ndarray) -> np.ndarray:
-    """Normaliza el audio sin llevarlo a saturación."""
+    """Normaliza el audio mediante RMS."""
 
     audio = np.asarray(
         audio,
         dtype=np.float32,
     )
 
-    audio = audio - np.mean(audio)
+    audio -= np.mean(audio)
 
     rms = np.sqrt(
         np.mean(audio ** 2)
@@ -113,85 +113,63 @@ def normalize_signal(audio: np.ndarray) -> np.ndarray:
     return audio / rms
 
 
-def brown_noise(
+def midi_to_hz(note: float) -> float:
+    """Convierte una nota MIDI a frecuencia."""
+
+    return 440.0 * (
+        2.0 ** ((note - 69.0) / 12.0)
+    )
+
+
+def generate_beta_phase(
     length: int,
+    low_frequency: float,
+    high_frequency: float,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Genera ruido marrón controlado."""
+    """Genera una fase beta con deriva de frecuencia."""
 
-    white = rng.standard_normal(
-        length
-    ).astype(np.float32)
-
-    brown = np.cumsum(
-        white,
-        dtype=np.float32,
-    )
-
-    band_filter = signal.butter(
-        3,
-        [30, 350],
-        btype="bandpass",
-        fs=SAMPLE_RATE,
-        output="sos",
-    )
-
-    brown = signal.sosfiltfilt(
-        band_filter,
-        brown,
-    )
-
-    return normalize_signal(brown)
-
-
-def pink_band_noise(
-    length: int,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    """Genera ruido rosa filtrado para reducir el efecto de viento."""
-
-    white = rng.standard_normal(
-        length
-    ).astype(np.float32)
-
-    spectrum = np.fft.rfft(white)
-
-    frequencies = np.fft.rfftfreq(
+    time = np.arange(
         length,
-        d=1 / SAMPLE_RATE,
+        dtype=np.float64,
+    ) / SAMPLE_RATE
+
+    control_count = max(
+        4,
+        int(time[-1] / 4) + 2,
     )
 
-    pink_weight = np.zeros_like(
-        frequencies
+    control_time = np.linspace(
+        0,
+        time[-1],
+        control_count,
     )
 
-    valid = frequencies > 0
-
-    pink_weight[valid] = (
-        1 / np.sqrt(frequencies[valid])
+    frequencies = rng.uniform(
+        low_frequency,
+        high_frequency,
+        control_count,
     )
 
-    band_mask = (
-        (frequencies >= 100)
-        & (frequencies <= 5_500)
+    frequencies = np.interp(
+        time,
+        control_time,
+        frequencies,
     )
 
-    spectrum *= pink_weight
-    spectrum *= band_mask
-
-    pink = np.fft.irfft(
-        spectrum,
-        n=length,
+    return (
+        2.0
+        * np.pi
+        * np.cumsum(frequencies)
+        / SAMPLE_RATE
     )
 
-    return normalize_signal(pink)
 
-
-def texture_noise(
+def generate_soft_texture(
     length: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Genera una textura media más definida."""
+    """Genera una textura ambiental muy baja."""
 
     white = rng.standard_normal(
         length
@@ -199,7 +177,7 @@ def texture_noise(
 
     texture_filter = signal.butter(
         3,
-        [250, 3_500],
+        [180, 5_000],
         btype="bandpass",
         fs=SAMPLE_RATE,
         output="sos",
@@ -213,75 +191,6 @@ def texture_noise(
     return normalize_signal(texture)
 
 
-def focus_noise_bed(
-    length: int,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    """Crea la capa base de concentración."""
-
-    brown = brown_noise(
-        length,
-        rng,
-    )
-
-    pink = pink_band_noise(
-        length,
-        rng,
-    )
-
-    texture = texture_noise(
-        length,
-        rng,
-    )
-
-    return normalize_signal(
-        0.42 * brown
-        + 0.40 * pink
-        + 0.18 * texture
-    )
-
-
-def drifting_phase(
-    length: int,
-    low_frequency: float,
-    high_frequency: float,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    """Genera modulación beta con deriva suave."""
-
-    time = np.arange(length) / SAMPLE_RATE
-
-    points = max(
-        4,
-        int(time[-1] / 3) + 2,
-    )
-
-    point_times = np.linspace(
-        0,
-        time[-1],
-        points,
-    )
-
-    frequencies = rng.uniform(
-        low_frequency,
-        high_frequency,
-        points,
-    )
-
-    frequencies = np.interp(
-        time,
-        point_times,
-        frequencies,
-    )
-
-    return (
-        2
-        * np.pi
-        * np.cumsum(frequencies)
-        / SAMPLE_RATE
-    )
-
-
 @st.cache_data(show_spinner=False)
 def synthesize_focus_audio(
     duration: int,
@@ -289,10 +198,16 @@ def synthesize_focus_audio(
     seed: int,
 ) -> bytes:
     """
-    Genera audio focus procedural.
+    Genera una pieza original de deep focus.
 
-    La modulación se aplica sobre ruido.
-    No se agregan tonos musicales ni samples externos.
+    Incluye:
+
+    - Pads armónicos.
+    - Motivos melódicos.
+    - Pulsos rítmicos.
+    - Modulación beta.
+    - Estéreo suave.
+    - Sin canciones ni samples externos.
     """
 
     rng = np.random.default_rng(seed)
@@ -308,68 +223,252 @@ def synthesize_focus_audio(
         duration * SAMPLE_RATE
     )
 
-    # 80 % de capa estable.
-    base_layer = focus_noise_bed(
+    pad = np.zeros(
         length,
-        rng,
+        dtype=np.float32,
     )
 
-    # 20 % de capa rítmica.
-    pulse_carrier = texture_noise(
+    rhythm = np.zeros(
         length,
-        rng,
+        dtype=np.float32,
     )
 
-    phase_a = drifting_phase(
+    melody = np.zeros(
+        length,
+        dtype=np.float32,
+    )
+
+    # Progresión original en una escala atmosférica.
+    progression = [
+        [50, 57, 62, 65],
+        [48, 55, 60, 64],
+        [53, 60, 65, 69],
+        [45, 52, 57, 60],
+        [50, 57, 62, 67],
+        [48, 55, 60, 65],
+        [53, 60, 64, 69],
+        [45, 52, 57, 62],
+    ]
+
+    segment_length = int(
+        8 * SAMPLE_RATE
+    )
+
+    segment_count = int(
+        np.ceil(length / segment_length)
+    )
+
+    for segment_index in range(segment_count):
+        start = (
+            segment_index
+            * segment_length
+        )
+
+        if start >= length:
+            break
+
+        end = min(
+            start + segment_length,
+            length,
+        )
+
+        chord = progression[
+            segment_index
+            % len(progression)
+        ]
+
+        local_length = end - start
+
+        local_time = np.arange(
+            local_length,
+            dtype=np.float64,
+        ) / SAMPLE_RATE
+
+        # Pad armónico.
+        amplitudes = [
+            0.34,
+            0.20,
+            0.13,
+            0.08,
+        ]
+
+        for note_index, note in enumerate(
+            chord
+        ):
+            frequency = midi_to_hz(note)
+
+            phase_offset = rng.uniform(
+                0,
+                2 * np.pi,
+            )
+
+            slow_movement = (
+                0.92
+                + 0.08
+                * np.sin(
+                    2
+                    * np.pi
+                    * 0.08
+                    * local_time
+                    + phase_offset
+                )
+            )
+
+            pad[start:end] += (
+                amplitudes[note_index]
+                * slow_movement
+                * np.sin(
+                    2
+                    * np.pi
+                    * frequency
+                    * local_time
+                    + phase_offset
+                )
+            )
+
+            # Segundo armónico suave.
+            pad[start:end] += (
+                amplitudes[note_index]
+                * 0.12
+                * np.sin(
+                    2
+                    * np.pi
+                    * frequency
+                    * 2
+                    * local_time
+                    + phase_offset
+                )
+            )
+
+        # Pulso musical de baja frecuencia.
+        root_frequency = midi_to_hz(
+            chord[0] + 12
+        )
+
+        rhythm[start:end] += (
+            0.34
+            * np.sin(
+                2
+                * np.pi
+                * root_frequency
+                * local_time
+            )
+        )
+
+        rhythm[start:end] += (
+            0.13
+            * np.sin(
+                2
+                * np.pi
+                * root_frequency
+                * 1.5
+                * local_time
+            )
+        )
+
+        # Motivo melódico original.
+        note_length = int(
+            1.6 * SAMPLE_RATE
+        )
+
+        for note_index in range(5):
+            note_start = (
+                start
+                + note_index
+                * note_length
+            )
+
+            note_end = min(
+                note_start + note_length,
+                end,
+            )
+
+            if note_start >= length:
+                break
+
+            note_time = np.arange(
+                note_end - note_start,
+                dtype=np.float64,
+            ) / SAMPLE_RATE
+
+            selected_note = chord[
+                (
+                    note_index
+                    + segment_index
+                )
+                % len(chord)
+            ]
+
+            melody_frequency = midi_to_hz(
+                selected_note + 12
+            )
+
+            note_duration = max(
+                note_length / SAMPLE_RATE,
+                0.01,
+            )
+
+            envelope = np.sin(
+                np.pi
+                * note_time
+                / note_duration
+            ) ** 2
+
+            melody[
+                note_start:note_end
+            ] += (
+                0.18
+                * envelope
+                * np.sin(
+                    2
+                    * np.pi
+                    * melody_frequency
+                    * note_time
+                )
+            )
+
+    # Modulación beta aplicada principalmente al ritmo.
+    beta_phase = generate_beta_phase(
         length,
         low_frequency,
         high_frequency,
         rng,
     )
 
-    phase_b = drifting_phase(
+    beta_pulse = (
+        0.5
+        + 0.5
+        * np.sin(beta_phase)
+    )
+
+    beta_pulse = beta_pulse ** 1.7
+
+    rhythm *= (
+        0.30
+        + 0.70 * beta_pulse
+    )
+
+    pad = normalize_signal(pad)
+    rhythm = normalize_signal(rhythm)
+    melody = normalize_signal(melody)
+
+    texture = generate_soft_texture(
         length,
-        low_frequency * 0.98,
-        high_frequency * 0.98,
         rng,
     )
 
-    # Dos modulaciones ligeramente diferentes.
-    # Esto genera movimiento sin crear un pitido.
-    pulse_a = (
-        0.5
-        + 0.5 * np.sin(phase_a)
-    )
-
-    pulse_b = (
-        0.5
-        + 0.5 * np.sin(phase_b)
-    )
-
-    pulse_a = pulse_a ** 2.2
-    pulse_b = pulse_b ** 1.8
-
-    pulse = (
-        0.68 * pulse_a
-        + 0.32 * pulse_b
-    )
-
-    # Modulación perceptible pero suave.
-    envelope = 0.22 + 0.78 * pulse
-
-    rhythmic_layer = (
-        pulse_carrier * envelope
-    )
-
-    # Arquitectura anti-helicóptero.
+    # Mezcla musical.
+    # La textura ambiental queda muy baja para evitar sonido de viento.
     audio = (
-        0.80 * base_layer
-        + 0.20 * rhythmic_layer
+        0.48 * pad
+        + 0.30 * rhythm
+        + 0.19 * melody
+        + 0.03 * texture
     )
 
-    # Fade in y fade out.
+    # Fade de entrada y salida.
     fade_length = min(
-        int(0.8 * SAMPLE_RATE),
+        int(1.2 * SAMPLE_RATE),
         length // 2,
     )
 
@@ -389,28 +488,34 @@ def synthesize_focus_audio(
 
     audio *= fade
 
-    # Suaviza picos agresivos.
+    # Suavizado de picos.
     audio = np.tanh(
         audio * 0.65
     )
 
-    # Nivel final moderado.
+    # Volumen final seguro.
     peak = np.max(
         np.abs(audio)
     )
 
     if peak > 0:
-        audio = audio / peak
-        audio *= 0.28
+        audio = (
+            audio
+            / peak
+            * 0.38
+        )
 
-    # Estéreo ligero.
-    stereo_side = texture_noise(
-        length,
-        rng,
+    # Estéreo sutil.
+    stereo_width = (
+        0.025
+        * normalize_signal(
+            pad * 0.7
+            + melody * 0.3
+        )
     )
 
-    left = audio + stereo_side * 0.018
-    right = audio - stereo_side * 0.018
+    left = audio + stereo_width
+    right = audio - stereo_width
 
     stereo = np.column_stack(
         (left, right)
@@ -447,6 +552,43 @@ def format_time(seconds: int) -> str:
     return f"{minutes:02d}:{remaining:02d}"
 
 
+def extract_preview(
+    audio_bytes: bytes,
+) -> np.ndarray:
+    """Extrae una vista previa de la onda para Streamlit."""
+
+    raw = np.frombuffer(
+        audio_bytes[44:],
+        dtype=np.int16,
+    )
+
+    if len(raw) < 2:
+        return np.zeros(100)
+
+    stereo = raw.reshape(
+        -1,
+        2,
+    )
+
+    left_channel = (
+        stereo[:, 0].astype(np.float32)
+        / 32_767
+    )
+
+    preview_size = min(
+        1_500,
+        len(left_channel),
+    )
+
+    indexes = np.linspace(
+        0,
+        len(left_channel) - 1,
+        preview_size,
+    ).astype(int)
+
+    return left_channel[indexes]
+
+
 st.markdown(
     """
     <section class="hero">
@@ -460,9 +602,9 @@ st.markdown(
         </h1>
 
         <p class="description">
-            Generador de audio procedural para concentración.
-            Utiliza ruido marrón, ruido rosa filtrado y modulación
-            rítmica de amplitud sin melodías ni samples externos.
+            Música generativa original con pads armónicos,
+            ondas rítmicas y modulación beta para sesiones
+            prolongadas de concentración.
         </p>
     </section>
     """,
@@ -499,19 +641,19 @@ mode = (
 )
 
 seed = st.number_input(
-    "Semilla de generación",
+    "Semilla musical",
     min_value=1,
     max_value=999_999,
     value=7421,
     step=1,
-    help="Cambia este número para obtener otra textura.",
+    help="Cambia este número para crear otra composición.",
 )
 
 st.markdown(
     """
     <div class="notice">
-        El audio se crea desde cero con algoritmos matemáticos.
-        No utiliza canciones, samples ni melodías de terceros.
+        Cada audio se crea desde cero con síntesis matemática.
+        No se utilizan canciones, samples ni melodías protegidas.
     </div>
     """,
     unsafe_allow_html=True,
@@ -520,12 +662,12 @@ st.markdown(
 st.write("")
 
 if st.button(
-    "🎧 Crear audio Deep Focus",
+    "🎧 Crear música Deep Focus",
     type="primary",
     use_container_width=True,
 ):
     with st.spinner(
-        "Generando textura de concentración..."
+        "Generando composición focus..."
     ):
         st.session_state["audio_bytes"] = (
             synthesize_focus_audio(
@@ -544,7 +686,7 @@ if "audio_bytes" in st.session_state:
     audio_duration = st.session_state["audio_duration"]
 
     st.success(
-        "Audio generado: "
+        "Composición creada: "
         f"{audio_mode.upper()} · "
         f"{format_time(audio_duration)}"
     )
@@ -555,7 +697,7 @@ if "audio_bytes" in st.session_state:
     )
 
     st.download_button(
-        "⬇️ Descargar audio WAV",
+        "⬇️ Descargar música WAV",
         data=audio_bytes,
         file_name=(
             f"deep-focus-{audio_mode}-"
@@ -565,9 +707,17 @@ if "audio_bytes" in st.session_state:
         use_container_width=True,
     )
 
+    st.subheader("Visualización de la onda")
+
+    st.line_chart(
+        extract_preview(audio_bytes),
+        height=180,
+        use_container_width=True,
+    )
+
 st.divider()
 
 st.caption(
-    "Audio procedural original para concentración. "
+    "Composición procedural original. "
     "No es un tratamiento médico para TDAH."
 )
