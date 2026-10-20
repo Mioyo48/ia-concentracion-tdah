@@ -479,7 +479,7 @@ def render_chunk(
     )
 
     # Suavizado analógico.
-   audio = np.tanh(
+    audio = np.tanh(
        audio * 0.45
     )
 
