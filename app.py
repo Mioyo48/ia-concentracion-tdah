@@ -8,70 +8,57 @@ import random
 # Configuración de la página
 st.set_page_config(page_title="NeuralFocus Pro", page_icon="🧠")
 
-# Estilo CSS Profesional y Oscuro
+# Estilo CSS Minimalista y Profesional
 st.markdown("""
     <style>
     .main { background-color: #020617; color: white; }
-    h1 { color: #60a5fa; text-align: center; font-size: 3rem !important; margin-bottom: 0px; }
-    .subtitle { text-align: center; color: #94a3b8; font-size: 1.1rem; margin-bottom: 30px; }
+    h1 { color: #60a5fa; text-align: center; font-size: 2.5rem !important; }
+    .subtitle { text-align: center; color: #94a3b8; font-size: 1rem; margin-bottom: 30px; }
     .stButton>button { 
-        width: 100%; border-radius: 20px; font-weight: bold; height: 4em; font-size: 1.1rem;
-        transition: 0.3s; border: 1px solid #38bdf8;
+        width: 100%; border-radius: 20px; font-weight: bold; height: 3.5em; 
+        transition: 0.3s; border: 1px solid #334155; background-color: #1e293b !important; color: white !important;
     }
-    .btn-normal { background-color: #1e293b !important; color: #60a5fa !important; }
-    .btn-tdah { background-color: #1e293b !important; color: #f43f5e !important; border: 2px solid #f43f5e !important; }
-    button:hover { transform: scale(1.02); background-color: #334155 !important; }
+    button:hover { background-color: #334155 !important; border-color: #60a5fa !important; }
     </style>
     """, unsafe_allow_html=True)
 
 st.title("🧠 NeuralFocus Pro")
-st.markdown("<p class='subtitle'>Sincronización de Fase Neural para Enfoque Profundo</p>", unsafe_allow_html=True)
+st.markdown("<p class='subtitle'>Modulación Neural Orgánica para Enfoque Profundo</p>", unsafe_allow_html=True)
 
-def generar_audio_brainfm(modo):
+def generar_audio_organico(modo):
     duracion = 60 
     tasa_muestreo = 44100
     t = np.linspace(0, duracion, int(tasa_muestreo * duracion), endpoint=False)
 
-    # --- 1. CREACIÓN DEL "SOPLIDO" (RUIDO COMPLEJO) ---
-    # Mezclamos Ruido Marrón (profundo) y Rosa (energía) para crear una base orgánica
+    # --- 1. CREACIÓN DE LA BASE ESTÁTICA (La manta de sonido) ---
+    # Generamos ruido blanco y lo filtramos para que sea Ruido Marrón profundo
     blanco = np.random.normal(0, 1, len(t))
-    
-    # Filtro para Ruido Marrón
-    b_m, a_m = signal.butter(1, 0.005, 'low')
-    marron = signal.filtfilt(b_m, a_m, blanco)
-    
-    # Filtro para Ruido Rosa
-    b_p, a_p = signal.butter(1, 0.05, 'low')
-    rosa = signal.filtfilt(b_p, a_p, blanco)
-    
-    # Base: 70% Marrón + 30% Rosa
-    base_noise = (marron * 0.7) + (rosa * 0.3)
-    base_noise /= np.max(np.abs(base_noise))
+    b, a = signal.butter(1, 0.005, 'low')
+    base_marron = signal.filtfilt(b, a, blanco)
+    base_marron /= np.max(np.abs(base_marron))
 
-    # --- 2. EL SECRETO DE BRAIN.FM: MODULACIÓN DE AMPLITUD (AM) ---
-    # En lugar de sumar un tono, hacemos que el ruido PULSE a la frecuencia Beta
+    # --- 2. EL PULSO SUTIL (La parte que concentra) ---
     if modo == "TDAH":
-        # Frecuencia Beta Alta (18-22Hz) para cerebro TDAH
-        f_mod = random.uniform(18.0, 22.0) 
-        intensidad = 0.4  # Pulso más fuerte para mantener el cerebro despierto
+        f_mod = random.uniform(18.0, 22.0) # Beta alta
+        intensidad = 0.12 # Intensidad BAJA para evitar el efecto helicóptero
     else:
-        # Frecuencia Beta Baja (12-15Hz) para concentración estable
-        f_mod = random.uniform(12.0, 15.0)
-        intensidad = 0.2  # Pulso más sutil
+        f_mod = random.uniform(12.0, 15.0) # Beta baja
+        intensidad = 0.08 # Muy sutil
 
-    # Creamos la onda moduladora (el "latido" de la concentración)
-    # Usamos una onda senoidal que varía entre (1 - intensidad) y (1 + intensidad)
+    # Creamos el modulador (Seno suave)
     modulador = 1 + intensidad * np.sin(2 * np.pi * f_mod * t)
     
-    # APLICAMOS LA MODULACIÓN: El ruido ahora pulsa rítmicamente
-    audio_modulado = base_noise * modulador
+    # Aplicamos la modulación SOLO a una capa de ruido, no a todo
+    pulso_estímulo = base_marron * modulador
+    pulso_estímulo /= np.max(np.abs(pulso_estímulo))
+
+    # --- 3. LA MEZCLA MAESTRA (El secreto del sonido orgánico) ---
+    # Mezclamos una capa que NUNCA cambia con la capa que PULSA.
+    # 80% Base Constante + 20% Pulso Neural
+    # Esto elimina el efecto de "helicóptero" porque el sonido nunca cae a cero.
+    audio_final = (base_marron * 0.8) + (pulso_estímulo * 0.2)
     
-    # --- 3. CAPA DE ESTABILIZACIÓN ---
-    # Añadimos una capa muy suave de ruido blanco filtrado para evitar el "vacío"
-    estabilizador = np.random.normal(0, 0.02, len(t))
-    audio_final = audio_modulado + estabilizador
-    
-    # Normalización final para evitar distorsión
+    # Normalización final
     audio_final /= np.max(np.abs(audio_final))
     
     # Convertir a 16-bit PCM
@@ -86,24 +73,22 @@ st.write("---")
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🔵 Enfoque Estándar", key="btn_n"):
-        with st.spinner("Sincronizando fase..."):
-            audio = generar_audio_brainfm("Normal")
+    if st.button("🔵 Enfoque Estable", key="btn_n"):
+        with st.spinner("Sincronizando..."):
+            audio = generar_audio_organico("Normal")
             st.audio(audio, format="audio/wav")
-            st.success("Sincronizado a Beta Baja")
 
 with col2:
     if st.button("🔴 Impulso TDAH", key="btn_t"):
-        with st.spinner("Activando drive neural..."):
-            audio = generar_audio_brainfm("TDAH")
+        with st.spinner("Activando..."):
+            audio = generar_audio_organico("TDAH")
             st.audio(audio, format="audio/wav")
-            st.success("Sincronizado a Beta Alta")
 
 st.write("---")
 st.markdown("""
-<div style='text-align: center; color: #64748b; font-size: 0.85rem;'>
-    <b>Tecnología de Modulación de Fase:</b><br>
-    A diferencia de los beats binaurales, este sistema modula la amplitud del ruido <br>
-    en tiempo real para inducir un estado de flujo (flow state) en la corteza prefrontal.
+<div style='text-align: center; color: #64748b; font-size: 0.8rem;'>
+    Este sistema utiliza <b>Mezcla de Capas Asíncronas</b>. <br>
+    Al mantener una base constante y un pulso sutil, inducimos el estado de flujo <br>
+    sin generar fatiga auditiva ni ruidos mecánicos.
 </div>
 """, unsafe_allow_html=True)
