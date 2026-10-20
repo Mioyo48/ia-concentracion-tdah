@@ -23,7 +23,6 @@ st.markdown("""
         font-family: 'Inter', sans-serif !important;
     }
 
-    /* Contenedor Principal estilo Tarjeta de Cristal */
     .main-card {
         background: rgba(30, 41, 59, 0.4);
         backdrop-filter: blur(12px);
@@ -54,7 +53,6 @@ st.markdown("""
         font-size: 1rem;
     }
 
-    /* Botones Estilo Moderno */
     div.stButton > button {
         width: 100%;
         border-radius: 15px !important;
@@ -73,7 +71,6 @@ st.markdown("""
         box-shadow: 0 10px 20px -10px rgba(56, 189, 248, 0.5);
     }
 
-    /* Ocultar elementos innecesarios de Streamlit */
     [data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
     
     .science-box {
@@ -88,55 +85,45 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# ─── MOTOR DE AUDIO NEURONAL (SINTESIZADOR CORE) ──────────────────────────────
+# ─── MOTOR DE AUDIO NEURONAL ──────────────────────────────────────────────────
 
 def generate_neural_audio(mode):
-    # Parámetros de alta fidelidad
     duration = 60 
     sr = 44100
     t = np.linspace(0, duration, int(sr * duration), endpoint=False)
 
-    # 1. Generación de Ruido Orgánico (Marrón + Rosa)
+    # 1. Generación de Ruido Orgánico
     white = np.random.normal(0, 1, len(t))
-    # Ruido Marrón (Deep Focus)
     b_m, a_m = signal.butter(1, 0.005, 'low')
-    brown = signal.filtfilt(b_m, a_m, blanco if 'blanco' in locals() else white)
-    # Ruido Rosa (Energy)
+    brown = signal.filtfilt(b_m, a_m, white)
     b_p, a_p = signal.butter(1, 0.05, 'low')
     pink = signal.filtfilt(b_p, a_p, white)
     
-    # Mezcla base: 70% Marrón, 30% Rosa
     base_noise = (brown * 0.7) + (pink * 0.3)
     base_noise /= np.max(np.abs(base_noise))
 
-    # 2. Parámetros de Modulación según Perfil
+    # 2. Parámetros de Modulación
     if mode == "TDAH":
-        # Beta Alta: Alerta máxima y reducción de impulsividad
         f_mod = random.uniform(18.0, 24.0)
         depth = 0.15 
-        drift = random.uniform(0.1, 0.4) # Deriva de frecuencia para evitar habituación
+        drift = random.uniform(0.1, 0.4)
     else:
-        # Beta Baja: Concentración profunda y flujo estable
         f_mod = random.uniform(12.0, 16.0)
         depth = 0.08
         drift = random.uniform(0.05, 0.2)
 
     # 3. Algoritmo de Modulación de Fase Orgánica
-    # Creamos una frecuencia que oscila suavemente para imitar la biología humana
     freq_env = f_mod + drift * np.sin(2 * np.pi * 0.02 * t)
     phase = 2 * np.pi * np.cumsum(freq_env) / sr
-    
-    # Modulador de Amplitud (El efecto Brain.fm)
     modulator = 1 + depth * np.sin(phase)
     
-    # Capas Asíncronas: Solo modulamos el 30% del sonido para evitar el efecto helicóptero
+    # Capas Asíncronas para evitar efecto helicóptero
     layer_static = base_noise * 0.7
     layer_neural = (base_noise * modulator) * 0.3
     
     audio_final = layer_static + layer_neural
     audio_final /= np.max(np.abs(audio_final))
     
-    # Exportación a PCM 16-bit
     audio_int16 = (audio_final * 32767).astype(np.int16)
     buf = io.BytesIO()
     wavfile.write(buf, sr, audio_int16)
@@ -144,13 +131,11 @@ def generate_neural_audio(mode):
 
 # ─── INTERFAZ DE USUARIO (UI) ──────────────────────────────────────────────────
 
-# Envolvemos todo en un div para el efecto de tarjeta de cristal
 st.markdown('<div class="main-card">', unsafe_allow_html=True)
 
 st.markdown("<h1>NeuralFocus Core</h1>", unsafe_allow_html=True)
-st.markdown("<p class='subtitle'>Sincronización de Fase Neural para el Alto Rendimiento Cognitivo</p>", unsafe_//html=True)
+st.markdown("<p class='subtitle'>Sincronización de Fase Neural para el Alto Rendimiento Cognitivo</p>", unsafe_allow_html=True)
 
-# Selector de modo optimizado
 mode = st.radio(
     label="Seleccione el perfil de sincronización", 
     options=["TDAH", "Normal"], 
@@ -164,26 +149,24 @@ col1, col2 = st.columns(2)
 
 with col1:
     if st.button("🔵 Focus Estable"):
-        with st.spinner("Sincronizando ondas Beta..."):
-            audio = generar_audio_brainfm("Normal") if 'generar_audio_brainfm' in locals() else generar_audio_neural_audio("Normal")
+        with st.spinner("Sincronizando..."):
+            audio = generate_neural_audio("Normal")
             st.audio(audio, format="audio/wav")
 
 with col2:
     if st.button("🔴 Impulso TDAH"):
-        with st.spinner("Activando Drive Neural..."):
-            audio = generar_audio_brainfm("TDAH") if 'generar_audio_brainfm' in locals() else generar_audio_neural_audio("TDAH")
+        with st.spinner("Activando..."):
+            audio = generate_neural_audio("TDAH")
             st.audio(audio, format="audio/wav")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Sección de ciencia (estilo documentación premium)
 st.markdown("""
     <div class="science-box">
         <strong>Anatomía del Sonido:</strong><br>
         Este sistema implementa <i>Amplitude Modulation (AM)</i> sobre una base de ruido rosa y marrón. <br>
-        Al modular el ruido a frecuencias Beta, inducimos un estado de <b>entrainment</b> en la corteza prefrontal, <br>
-        optimizando la relación señal-ruido del cerebro y eliminando la fatiga auditiva.
+        Al modular el ruido a frecuencias Beta, inducimos un estado de <b>entrainment</b> en la corteza prefrontal.
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True) # Cierra la main-card
+st.markdown('</div>', unsafe_allow_html=True)
