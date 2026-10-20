@@ -129,7 +129,7 @@ def build_music_plan(
     mode: str,
     rng: np.random.Generator,
 ) -> dict:
-    """Crea una planificación musical aleatoria para toda la canción."""
+    """Crea una composición con variaciones humanas y aleatorias."""
 
     progression = [
         [50, 57, 62, 65],
@@ -148,24 +148,71 @@ def build_music_plan(
         )
     )
 
-    notes_per_segment = int(
-        SEGMENT_SECONDS / NOTE_SECONDS
-    )
+    notes_per_segment = 16
 
-    chord_ids = rng.integers(
-        0,
-        len(progression),
+    chord_ids = np.zeros(
         segment_count,
+        dtype=np.int32,
     )
 
-    note_choices = rng.integers(
-        0,
-        4,
+    previous_chord = -1
+
+    # Evita repetir el mismo acorde consecutivamente.
+    for segment_index in range(segment_count):
+        candidates = [
+            index
+            for index in range(len(progression))
+            if index != previous_chord
+        ]
+
+        selected_chord = int(
+            rng.choice(candidates)
+        )
+
+        chord_ids[segment_index] = selected_chord
+        previous_chord = selected_chord
+
+    # El estudio usado como referencia trabajó con música
+    # alrededor de 120 BPM. Aquí se humaniza ligeramente.
+    tempo_bpm = rng.uniform(
+        116.0,
+        124.0,
+    )
+
+    beat_seconds = 60.0 / tempo_bpm
+
+    note_starts = np.zeros(
+        (
+            segment_count,
+            notes_per_segment,
+        ),
+        dtype=np.float64,
+    )
+
+    note_lengths = rng.uniform(
+        0.28,
+        0.48,
         (
             segment_count,
             notes_per_segment,
         ),
     )
+
+    note_velocities = rng.uniform(
+        0.72,
+        1.12,
+        (
+            segment_count,
+            notes_per_segment,
+        ),
+    )
+
+    note_active = rng.random(
+        (
+            segment_count,
+            notes_per_segment,
+        )
+    ) > 0.10
 
     pad_phases = rng.uniform(
         0,
@@ -184,6 +231,33 @@ def build_music_plan(
             notes_per_segment,
         ),
     )
+
+    for segment_index in range(segment_count):
+        microtiming = rng.normal(
+            0.0,
+            0.018,
+            notes_per_segment,
+        )
+
+        starts = (
+            np.arange(notes_per_segment)
+            * beat_seconds
+            + microtiming
+        )
+
+        starts[0] = 0.0
+
+        note_starts[segment_index] = np.clip(
+            starts,
+            0.0,
+            SEGMENT_SECONDS - 0.05,
+        )
+
+        # Siempre comienza cada segmento con una nota.
+        note_active[
+            segment_index,
+            0,
+        ] = True
 
     if mode == "adhd":
         low_frequency = 14.5
@@ -214,11 +288,18 @@ def build_music_plan(
     return {
         "progression": progression,
         "chord_ids": chord_ids,
-        "note_choices": note_choices,
+        "note_starts": note_starts,
+        "note_lengths": note_lengths,
+        "note_velocities": note_velocities,
+        "note_active": note_active,
         "pad_phases": pad_phases,
         "melody_phases": melody_phases,
         "beta_control_times": beta_control_times,
         "beta_frequencies": beta_frequencies,
+        "macro_phase": rng.uniform(
+            0,
+            2 * np.pi,
+        ),
     }
 
 
@@ -256,7 +337,7 @@ def render_chunk(
     rng: np.random.Generator,
     beta_phase: float,
 ) -> tuple[np.ndarray, float]:
-    """Renderiza un bloque de ocho segundos."""
+    """Renderiza un bloque musical menos robótico."""
 
     progression = plan["progression"]
 
@@ -288,12 +369,31 @@ def render_chunk(
         dtype=np.float64,
     ) / SAMPLE_RATE
 
+    # Pads armónicos con movimiento lento.
     amplitudes = [
-        0.34,
-        0.20,
-        0.13,
-        0.08,
+        0.31,
+        0.19,
+        0.14,
+        0.09,
     ]
+
+    macro_phase = plan["macro_phase"]
+
+    macro_movement = (
+        0.94
+        + 0.06
+        * np.sin(
+            2
+            * np.pi
+            * 0.07
+            * (
+                start_frame
+                / SAMPLE_RATE
+                + local_time
+            )
+            + macro_phase
+        )
+    )
 
     for note_index, note in enumerate(chord):
         frequency = midi_to_hz(
@@ -304,90 +404,102 @@ def render_chunk(
             "pad_phases"
         ][segment_index][note_index]
 
-        movement = (
-            0.92
-            + 0.08
-            * np.sin(
-                2
-                * np.pi
-                * 0.08
-                * local_time
-                + phase_offset
-            )
+        pad_voice = np.sin(
+            2
+            * np.pi
+            * frequency
+            * local_time
+            + phase_offset
+        )
+
+        harmonic_voice = np.sin(
+            2
+            * np.pi
+            * frequency
+            * 2
+            * local_time
+            + phase_offset
         )
 
         pad += (
             amplitudes[note_index]
-            * movement
-            * np.sin(
-                2
-                * np.pi
-                * frequency
-                * local_time
-                + phase_offset
-            )
+            * macro_movement
+            * pad_voice
         )
 
         pad += (
             amplitudes[note_index]
-            * 0.11
-            * np.sin(
-                2
-                * np.pi
-                * frequency
-                * 2
-                * local_time
-                + phase_offset
-            )
+            * 0.09
+            * harmonic_voice
         )
 
-    root_frequency = midi_to_hz(
-        chord[0] + 24
-    )
+    notes_per_segment = 16
 
-    rhythm += (
-        0.30
-        * np.sin(
-            2
-            * np.pi
-            * root_frequency
-            * local_time
-        )
-    )
-
-    rhythm += (
-        0.12
-        * np.sin(
-            2
-            * np.pi
-            * root_frequency
-            * 1.5
-            * local_time
-        )
-    )
-
-    notes_per_segment = int(
-        SEGMENT_SECONDS / NOTE_SECONDS
-    )
-
+    # Ritmo y melodía humanizados.
     for note_index in range(notes_per_segment):
-        note_start = (
-            note_index
-            * NOTE_FRAMES
+        if not plan["note_active"][
+            segment_index
+        ][note_index]:
+            continue
+
+        note_start_seconds = plan[
+            "note_starts"
+        ][segment_index][note_index]
+
+        note_duration = plan[
+            "note_lengths"
+        ][segment_index][note_index]
+
+        note_velocity = plan[
+            "note_velocities"
+        ][segment_index][note_index]
+
+        note_start = int(
+            note_start_seconds
+            * SAMPLE_RATE
+        )
+
+        note_end = int(
+            (
+                note_start_seconds
+                + note_duration
+            )
+            * SAMPLE_RATE
+        )
+
+        note_start = max(
+            0,
+            note_start,
         )
 
         note_end = min(
-            note_start + NOTE_FRAMES,
             frames,
+            note_end,
         )
 
-        if note_start >= frames:
-            break
+        if note_end <= note_start:
+            continue
 
         note_time = np.arange(
-            note_end - note_start,
+            note_start,
+            note_end,
             dtype=np.float64,
         ) / SAMPLE_RATE
+
+        relative_time = (
+            note_time
+            - note_start_seconds
+        )
+
+        envelope = np.sin(
+            np.pi
+            * np.clip(
+                relative_time
+                / note_duration,
+                0,
+                1,
+            )
+        ) ** 1.6
 
         selected_note = chord[
             plan["note_choices"][
@@ -395,7 +507,15 @@ def render_chunk(
             ][note_index]
         ]
 
-        frequency = midi_to_hz(
+        rhythm_note = chord[
+            (note_index + 1) % len(chord)
+        ]
+
+        rhythm_frequency = midi_to_hz(
+            rhythm_note + 24
+        )
+
+        melody_frequency = midi_to_hz(
             selected_note + 24
         )
 
@@ -403,26 +523,62 @@ def render_chunk(
             "melody_phases"
         ][segment_index][note_index]
 
-        envelope = np.sin(
-            np.pi
-            * note_time
-            / NOTE_SECONDS
-        ) ** 2
+        # Acentos irregulares para evitar un patrón mecánico.
+        accent = (
+            1.18
+            if note_index % 4 == 0
+            else 0.88
+        )
 
-        melody[
-            note_start:note_end
-        ] += (
-            0.17
+        rhythm_slice = (
+            0.13
+            * note_velocity
+            * accent
             * envelope
             * np.sin(
                 2
                 * np.pi
-                * frequency
-                * note_time
+                * rhythm_frequency
+                * relative_time
                 + phase_offset
             )
         )
 
+        rhythm_slice += (
+            0.035
+            * envelope
+            * np.sin(
+                2
+                * np.pi
+                * rhythm_frequency
+                * 2
+                * relative_time
+                + phase_offset
+            )
+        )
+
+        melody_slice = (
+            0.10
+            * note_velocity
+            * envelope
+            * np.sin(
+                2
+                * np.pi
+                * melody_frequency
+                * relative_time
+                + phase_offset
+            )
+        )
+
+        rhythm[
+            note_start:note_end
+        ] += rhythm_slice
+
+        melody[
+            note_start:note_end
+        ] += melody_slice
+
+    # Modulación beta continua.
     global_time = (
         start_frame
         + np.arange(frames)
@@ -452,19 +608,22 @@ def render_chunk(
         * np.sin(phase)
     )
 
+    # Menor profundidad para que no suene robótico.
     beta_envelope = (
-        0.60
-        + 0.40
+        0.76
+        + 0.24
         * beta_wave
     )
 
+    # El pulso beta afecta sobre todo al ritmo,
+    # no a toda la canción por igual.
+    rhythm *= beta_envelope
+
     music = (
-        0.52 * pad
+        0.54 * pad
         + 0.27 * rhythm
         + 0.19 * melody
     )
-
-    music *= beta_envelope
 
     texture = generate_texture(
         frames,
@@ -473,9 +632,10 @@ def render_chunk(
 
     audio = (
         music
-        + 0.018 * texture
+        + 0.012 * texture
     )
 
+    # Fade inicial y final.
     fade_length = min(
         int(1.5 * SAMPLE_RATE),
         total_frames // 2,
@@ -520,17 +680,19 @@ def render_chunk(
 
     audio *= fade
 
+    # Saturación muy suave.
     audio = np.tanh(
-        audio * 0.45
+        audio * 0.48
     )
 
-    audio *= 0.55
+    audio *= 0.58
 
+    # Estéreo con movimiento mínimo.
     side = (
-        0.018
+        0.022
         * np.tanh(
-            0.5 * melody
-            + 0.2 * rhythm
+            0.65 * melody
+            + 0.25 * rhythm
         )
     )
 
@@ -545,15 +707,15 @@ def render_chunk(
         np.abs(stereo)
     )
 
-    target_peak = 0.24
+    target_peak = 0.22
 
     if peak > target_peak:
         stereo *= target_peak / peak
 
     stereo = np.clip(
         stereo,
-        -0.24,
-        0.24,
+        -target_peak,
+        target_peak,
     )
 
     return stereo, beta_phase
