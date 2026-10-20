@@ -1,152 +1,285 @@
-import streamlit as st
-import numpy as np
-from scipy import signal
+from __future__ import annotations
+
 import io
-from scipy.io import wavfile
-import random
+import wave
+from typing import Final
 
-# 1. Configuración de la página
-st.set_page_config(
-    page_title="NeuralFocus Core",
-    page_icon="🧠",
-    layout="centered",
-)
+import numpy as np
+from flask import Flask, jsonify, render_template, request, send_file
+from scipy import signal
 
-# 2. Diseño de Interfaz Premium
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
 
-    html, body, [data-testid="stAppViewContainer"] {
-        background: radial-gradient(circle at top right, #1e293b, #020617) !important;
-        color: #f8fafc !important;
-        font-family: 'Inter', sans-serif !important;
-    }
+app = Flask(__name__, template_folder=".")
 
-    .main-card {
-        background: rgba(30, 41, 59, 0.4);
-        backdrop-filter: blur(15px);
-        -webkit-backdrop-filter: blur(15px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 30px;
-        padding: 40px;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-        margin: 20px auto;
-        max-width: 600px;
-    }
+SAMPLE_RATE: Final[int] = 22_050
+MIN_DURATION: Final[int] = 5
+MAX_DURATION: Final[int] = 180
 
-    h1 {
-        font-weight: 600 !important;
-        letter-spacing: -0.02em !important;
-        background: linear-gradient(to right, #60a5fa, #a78bfa);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center !important;
-        font-size: 2.5rem !important;
-    }
+MODE_RANGES: Final[dict[str, tuple[float, float]]] = {
+    "normal": (13.0, 16.0),
+    "adhd": (18.0, 25.0),
+}
 
-    .subtitle {
-        text-align: center;
-        color: #94a3b8;
-        font-weight: 300;
-        margin-bottom: 2.5rem;
-        font-size: 1.1rem;
-    }
 
-    div.stButton > button {
-        width: 100%;
-        border-radius: 15px !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        background: rgba(255, 255, 255, 0.05) !important;
-        color: white !important;
-        font-weight: 500 !important;
-        transition: all 0.3s ease !important;
-        padding: 20px !important;
-        font-size: 1.1rem !important;
-    }
+def normalize(samples: np.ndarray) -> np.ndarray:
+    samples = np.asarray(samples, dtype=np.float32)
+    samples -= np.mean(samples, dtype=np.float64)
 
-    div.stButton > button:hover {
-        background: rgba(56, 189, 248, 0.2) !important;
-        border-color: #38bdf8 !important;
-        transform: translateY(-3px);
-        box-shadow: 0 10px 20px -10px rgba(56, 189, 248, 0.6);
-    }
+    deviation = float(np.std(samples, dtype=np.float64))
 
-    [data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
-    
-    .science-box {
-        background: rgba(15, 23, 42, 0.6);
-        border-radius: 20px;
-        padding: 25px;
-        font-size: 0.9rem;
-        color: #64748b;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        line-height: 1.7;
-        margin-top: 30px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    if deviation < 1e-8:
+        return np.zeros_like(samples)
 
-# 3. Motor de Audio (Cero errores de sintaxis)
-def generate_neural_audio(mode):
-    duration = 60 
-    sr = 44100
-    t = np.linspace(0, duration, int(sr * duration), endpoint=False)
+    return samples / deviation
 
-    # Ruido Orgánico (Marrón + Rosa)
-    white = np.random.normal(0, 1, len(t))
-    b_m, a_m = signal.butter(1, 0.005, 'low')
-    brown = signal.filtfilt(b_m, a_m, white)
-    b_p, a_p = signal.butter(1, 0.05, 'low')
-    pink = signal.filtfilt(b_p, a_p, white)
-    
-    base_noise = (brown * 0.7) + (pink * 0.3)
-    base_noise /= np.max(np.abs(base_noise))
 
-    # Parámetros de Modulación
-    if mode == "TDAH":
-        f_mod = random.uniform(18.0, 24.0)
-        depth = 0.12 
-    else:
-        f_mod = random.uniform(12.0, 16.0)
-        depth = 0.08
+def brown_noise(length: int, rng: np.random.Generator) -> np.ndarray:
+    white = rng.standard_normal(length).astype(np.float32)
+    brown = np.cumsum(white, dtype=np.float64)
 
-    # Modulación de Amplitud (Estilo Brain.fm)
-    modulator = 1 + depth * np.sin(2 * np.pi * f_mod * t)
-    pulso_neural = base_noise * modulator
-    pulso_neural /= np.max(np.abs(pulso_neural))
+    high_pass = signal.butter(
+        2,
+        20.0,
+        btype="highpass",
+        fs=SAMPLE_RATE,
+        output="sos",
+    )
 
-    # Mezcla Final: 80% Base Constante + 20% Pulso Neural
-    audio_final = (base_noise * 0.8) + (pulso_neural * 0.2)
-    audio_final /= np.max(np.abs(audio_final))
-    
-    audio_int16 = (audio_final * 32767).astype(np.int16)
-    buf = io.BytesIO()
-    wavfile.write(buf, sr, audio_int16)
-    return buf.getvalue()
+    brown = signal.sosfiltfilt(high_pass, brown)
 
-# 4. Interfaz de Usuario
-st.markdown('<div class="main-card">', unsafe_allow_html=True)
+    return normalize(brown)
 
-st.markdown("<h1>NeuralFocus Core</h1>", unsafe_allow_html=True)
-st.markdown("<p class='subtitle'>Sincronización de Fase Neural para el Alto Rendimiento Cognitivo</p>", unsafe_allow_html=True)
 
-mode = st.radio(
-    label="Seleccione el perfil de sincronización", 
-    options=["TDAH", "Normal"], 
-    horizontal=True, 
-    label_visibility="collapsed"
-)
+def pink_band_noise(
+    length: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    white = rng.standard_normal(length).astype(np.float32)
 
-st.write("---")
+    spectrum = np.fft.rfft(white)
+    frequencies = np.fft.rfftfreq(
+        length,
+        d=1.0 / SAMPLE_RATE,
+    )
 
-col1, col2 = st.columns(2)
+    weighting = np.ones_like(frequencies)
+    weighting[1:] = 1.0 / np.sqrt(frequencies[1:])
 
-with col1:
-    if st.button("🔵 Focus Estable"):
-        with st.spinner("Sincronizando..."):
-            audio = generate_neural_//audio("Normal") if False else generate_neural_audio("Normal")
-            st.audio(audio, format="audio/wav")
+    spectrum *= weighting
 
-# CORRECCIÓN FINAL: He eliminado cualquier posible barra en la linea de arriba
-# Re-escribiendo el bloque de botones para seguridad total:
+    pink = np.fft.irfft(spectrum, n=length)
+
+    band_pass = signal.butter(
+        4,
+        [80.0, 9_000.0],
+        btype="bandpass",
+        fs=SAMPLE_RATE,
+        output="sos",
+    )
+
+    pink = signal.sosfiltfilt(band_pass, pink)
+
+    return normalize(pink)
+
+
+def noise_bed(
+    length: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    brown = brown_noise(length, rng)
+    pink = pink_band_noise(length, rng)
+
+    return normalize(
+        0.58 * brown + 0.42 * pink
+    )
+
+
+def drifting_phase(
+    length: int,
+    low_hz: float,
+    high_hz: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    time = np.arange(length, dtype=np.float64) / SAMPLE_RATE
+
+    center_frequency = rng.uniform(
+        low_hz,
+        high_hz,
+    )
+
+    control_count = max(
+        4,
+        int(np.ceil(time[-1] / 2.0)) + 1,
+    )
+
+    control_time = np.linspace(
+        0.0,
+        time[-1],
+        control_count,
+    )
+
+    drift = rng.normal(
+        0.0,
+        0.22,
+        control_count,
+    )
+
+    drift = np.interp(
+        time,
+        control_time,
+        drift,
+    )
+
+    instantaneous_frequency = np.clip(
+        center_frequency + drift,
+        low_hz,
+        high_hz,
+    )
+
+    return (
+        2.0
+        * np.pi
+        * np.cumsum(instantaneous_frequency)
+        / SAMPLE_RATE
+    )
+
+
+def synthesize_focus_audio(
+    duration: int,
+    mode: str,
+) -> bytes:
+    low_hz, high_hz = MODE_RANGES[mode]
+
+    length = int(duration * SAMPLE_RATE)
+    rng = np.random.default_rng()
+
+    stable_layer = noise_bed(length, rng)
+    pulse_carrier = noise_bed(length, rng)
+
+    phase = drifting_phase(
+        length,
+        low_hz,
+        high_hz,
+        rng,
+    )
+
+    # La modulación se aplica al ruido.
+    # No se agregan tonos sinusoidales audibles.
+    pulse = 0.5 + 0.5 * np.sin(phase)
+
+    # Modulación suave para evitar efecto helicóptero.
+    modulated_layer = pulse_carrier * (
+        0.70 + 0.30 * pulse
+    )
+
+    # 80 % de base constante y 20 % de capa modulada.
+    audio = (
+        0.80 * stable_layer
+        + 0.20 * modulated_layer
+    )
+
+    # Fade in/out para evitar clics.
+    fade_samples = min(
+        int(0.75 * SAMPLE_RATE),
+        length // 2,
+    )
+
+    fade = np.ones(
+        length,
+        dtype=np.float32,
+    )
+
+    ramp = np.linspace(
+        0.0,
+        1.0,
+        fade_samples,
+        dtype=np.float32,
+    )
+
+    fade[:fade_samples] = ramp
+    fade[-fade_samples:] = ramp[::-1]
+
+    audio = normalize(audio * fade)
+
+    # Margen de seguridad contra clipping.
+    pcm = np.int16(
+        np.clip(
+            audio * 0.89,
+            -1.0,
+            1.0,
+        )
+        * 32_767
+    )
+
+    output = io.BytesIO()
+
+    with wave.open(output, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(SAMPLE_RATE)
+        wav_file.writeframes(pcm.tobytes())
+
+    output.seek(0)
+
+    return output.getvalue()
+
+
+@app.get("/")
+def index():
+    return render_template("index.html")
+
+
+@app.post("/generate")
+def generate():
+    payload = request.get_json(silent=True) or {}
+
+    mode = str(
+        payload.get("mode", "normal")
+    ).lower().strip()
+
+    try:
+        duration = int(
+            float(
+                payload.get(
+                    "duration",
+                    60,
+                )
+            )
+        )
+    except (TypeError, ValueError):
+        return jsonify(
+            error="La duración debe ser un número entero."
+        ), 400
+
+    if mode not in MODE_RANGES:
+        return jsonify(
+            error="El modo debe ser 'normal' o 'adhd'."
+        ), 400
+
+    if not MIN_DURATION <= duration <= MAX_DURATION:
+        return jsonify(
+            error=(
+                f"La duración debe estar entre "
+                f"{MIN_DURATION} y {MAX_DURATION} segundos."
+            )
+        ), 400
+
+    wav_bytes = synthesize_focus_audio(
+        duration,
+        mode,
+    )
+
+    return send_file(
+        io.BytesIO(wav_bytes),
+        mimetype="audio/wav",
+        as_attachment=True,
+        download_name=f"focus-{mode}-{duration}s.wav",
+    )
+
+
+if __name__ == "__main__":
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=True,
+    )
